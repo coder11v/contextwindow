@@ -1,0 +1,209 @@
+<![CDATA[<!DOCTYPE html>
+<html lang="en" class="h-full bg-black">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Neon</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .neon-text { text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 40px #00ffff; }
+      .neon-glow { box-shadow: 0 0 30px #00ffff; }
+      .neon-glow:hover { box-shadow: 0 0 50px #00ffff; }
+    </style>
+</head>
+<body class="h-screen flex flex-col items-center justify-center text-white">
+  <h1 class="text-7xl font-bold neon-text mb-8 tracking-wider">FLAPPY NEON</h1>
+
+  <canvas id="canvas" width="400" height="600" class="rounded-2xl neon-glow"></canvas>
+
+  <div id="score" class="absolute top-8 text-8xl font-bold neon-text">0</div>
+
+  <div id="start-screen" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-90">
+    <div class="text-center">
+      <h2 class="text-5xl font-bold neon-text mb-12">Tap / Click / Space to Flap</h2>
+      <button id="start-button" class="px-16 py-8 bg-cyan-500 text-4xl font-bold rounded-full neon-glow transition hover:bg-cyan-400">START</button>
+    </div>
+  </div>
+
+  <div id="game-over" class="hidden absolute inset-0 flex items-center justify-center bg-black bg-opacity-90">
+    <div class="text-center">
+      <h2 class="text-8xl font-bold text-red-500 neon-text" style="text-shadow: 0 0 20px #ff0000, 0 0 40px #ff0000;">GAME OVER</h2>
+      <p class="text-6xl mt-8 neon-text">Score: <span id="final-score">0</span></p>
+      <button id="restart-button" class="mt-12 px-16 py-8 bg-green-500 text-4xl font-bold rounded-full neon-glow transition hover:bg-green-400">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const scoreElement = document.getElementById('score');
+    const finalScore = document.getElementById('final-score');
+    const startScreen = document.getElementById('start-screen');
+    const gameOverScreen = document.getElementById('game-over');
+
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
+
+    const bird = {
+      x: 120,
+      y: HEIGHT / 2,
+      radius: 22,
+      velocity: 0,
+      gravity: 0.55,
+      jump: -13
+    };
+
+    let pipes = [];
+    let score = 0;
+    let frames = 0;
+    let gameStarted = false;
+    let gameOverFlag = false;
+
+    function resetGame() {
+      bird.y = HEIGHT / 2;
+      bird.velocity = 0;
+      pipes = [];
+      score = 0;
+      frames = 0;
+      gameOverFlag = false;
+      scoreElement.innerText = '0';
+    }
+
+    function createPipe() {
+      const gap = 180;
+      const min = 80;
+      const max = HEIGHT - gap - min;
+      const top = Math.random() * (max - min) + min;
+      pipes.push({ x: WIDTH, top, gap, scored: false });
+    }
+
+    function drawBackground() {
+      const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+      grad.addColorStop(0, '#16213e');
+      grad.addColorStop(1, '#0f0f1a');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    }
+
+    function drawBird() {
+      ctx.save();
+      ctx.translate(bird.x, bird.y);
+      const angle = Math.min(Math.max(bird.velocity * 0.05, -0.5), 0.8);
+      ctx.rotate(angle);
+
+      ctx.shadowColor = '#ff00ff';
+      ctx.shadowBlur = 40;
+      ctx.fillStyle = '#ff00ff';
+      ctx.beginPath();
+      ctx.arc(0, 0, bird.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // eye
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(12, -8, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(14, -8, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawPipes() {
+      pipes.forEach(pipe => {
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 30;
+        ctx.fillStyle = '#00ffff';
+
+        // top pipe + cap
+        ctx.fillRect(pipe.x, 0, 80, pipe.top);
+        ctx.fillRect(pipe.x - 15, pipe.top - 50, 110, 50);
+
+        // bottom pipe + cap
+        const bottomY = pipe.top + pipe.gap;
+        ctx.fillRect(pipe.x, bottomY, 80, HEIGHT - bottomY);
+        ctx.fillRect(pipe.x - 15, bottomY, 110, 50);
+      });
+      ctx.shadowBlur = 0;
+    }
+
+    function update() {
+      if (gameOverFlag) return;
+
+      bird.velocity += bird.gravity;
+      bird.y += bird.velocity;
+      frames++;
+
+      if (frames % 95 === 0) createPipe();
+
+      pipes = pipes.filter(pipe => pipe.x + 80 > -100);
+      pipes.forEach(pipe => {
+        pipe.x -= 3;
+
+        if (!pipe.scored && pipe.x + 80 < bird.x) {
+          pipe.scored = true;
+          score++;
+          scoreElement.innerText = score;
+        }
+
+        // collision
+        if (
+          bird.x + bird.radius > pipe.x &&
+          bird.x - bird.radius < pipe.x + 80 &&
+          (bird.y - bird.radius < pipe.top || bird.y + bird.radius > pipe.top + pipe.gap)
+        ) {
+          gameOverFlag = true;
+        }
+      });
+
+      if (bird.y - bird.radius < 0 || bird.y + bird.radius > HEIGHT) gameOverFlag = true;
+
+      if (gameOverFlag) {
+        finalScore.innerText = score;
+        gameOverScreen.classList.remove('hidden');
+      }
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      drawBackground();
+      drawPipes();
+      drawBird();
+    }
+
+    function loop() {
+      update();
+      render();
+      if (!gameOverFlag) requestAnimationFrame(loop);
+    }
+
+    function flap() {
+      if (!gameStarted) {
+        gameStarted = true;
+        startScreen.classList.add('hidden');
+        resetGame();
+        loop();
+      }
+      if (!gameOverFlag) bird.velocity = bird.jump;
+    }
+
+    canvas.addEventListener('click', flap);
+    canvas.addEventListener('touchstart', e => { e.preventDefault(); flap(); });
+    document.addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); flap(); } });
+
+    document.getElementById('start-button').onclick = flap;
+    document.getElementById('restart-button').onclick = () => {
+      gameOverScreen.classList.add('hidden');
+      resetGame();
+      loop();
+    };
+
+    // initial static screen
+    drawBackground();
+    drawBird();
+  </script>
+</body>
+</html>]]>
