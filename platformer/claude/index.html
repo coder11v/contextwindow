@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Platformer - 2 Player Race</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #gameWrapper {
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            border: 2px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 0 40px rgba(100, 50, 255, 0.3);
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #startScreen,
+        #winScreen {
+            pointer-events: auto;
+            text-align: center;
+            padding: 40px;
+            background: rgba(10, 10, 30, 0.95);
+            border-radius: 16px;
+            border: 2px solid rgba(100, 50, 255, 0.5);
+            box-shadow: 0 0 60px rgba(100, 50, 255, 0.3);
+        }
+
+        #winScreen {
+            display: none;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #ff6b6b, #a855f7, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 20px 0 30px;
+            text-align: left;
+        }
+
+        .player-controls {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .player-controls h3 {
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .p1-title {
+            color: #ff6b6b;
+        }
+
+        .p2-title {
+            color: #3b82f6;
+        }
+
+        .key {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            padding: 2px 8px;
+            margin: 1px;
+            font-size: 0.85em;
+            min-width: 28px;
+            text-align: center;
+        }
+
+        .controls-grid p {
+            margin: 4px 0;
+            color: #bbb;
+            font-size: 0.9em;
+        }
+
+        .portal-info {
+            color: #aaa;
+            margin-bottom: 25px;
+            font-size: 0.95em;
+            max-width: 400px;
+            line-height: 1.5;
+        }
+
+        .portal-info span.orange {
+            color: #f97316;
+        }
+
+        .portal-info span.blue {
+            color: #6366f1;
+        }
+
+        .portal-info span.green {
+            color: #22c55e;
+        }
+
+        .portal-info span.pink {
+            color: #ec4899;
+        }
+
+        button {
+            pointer-events: auto;
+            background: linear-gradient(135deg, #a855f7, #6366f1);
+            color: #fff;
+            border: none;
+            padding: 14px 40px;
+            font-size: 1.2em;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 25px rgba(168, 85, 247, 0.6);
+        }
+
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: none;
+            justify-content: space-between;
+            pointer-events: none;
+            font-size: 0.9em;
+        }
+
+        .hud-player {
+            padding: 8px 16px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.6);
+        }
+
+        #winScreen h2 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        #winScreen p {
+            color: #aaa;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="gameWrapper">
+        <canvas id="game"></canvas>
+        <div id="ui-overlay">
+            <div id="startScreen">
+                <h1>Portal Platformer</h1>
+                <p class="subtitle">Two Player Race to the Top!</p>
+                <div class="controls-grid">
+                    <div class="player-controls">
+                        <h3 class="p1-title">Player 1 (Red)</h3>
+                        <p><span class="key">W</span> Jump</p>
+                        <p><span class="key">A</span> Left &nbsp; <span class="key">D</span> Right</p>
+                        <p><span class="key">S</span> Drop through</p>
+                    </div>
+                    <div class="player-controls">
+                        <h3 class="p2-title">Player 2 (Blue)</h3>
+                        <p><span class="key">↑</span> Jump</p>
+                        <p><span class="key">←</span> Left &nbsp; <span class="key">→</span> Right</p>
+                        <p><span class="key">↓</span> Drop through</p>
+                    </div>
+                </div>
+                <p class="portal-info">
+                    Step into <span class="orange">portals</span> to teleport!
+                    Matching colored portals are linked. Race to the <span class="green">green flag</span> at the top!
+                </p>
+                <button onclick="startGame()">Start Game</button>
+            </div>
+            <div id="winScreen">
+                <h2 id="winText"></h2>
+                <p id="winTime"></p>
+                <button onclick="startGame()">Play Again</button>
+            </div>
+            <div id="hud">
+                <div class="hud-player" style="border-left: 3px solid #ff6b6b;">
+                    <span style="color:#ff6b6b;">P1</span> | <span id="p1time">0.0s</span>
+                </div>
+                <div class="hud-player" style="border-right: 3px solid #3b82f6; text-align:right;">
+                    <span id="p2time">0.0s</span> | <span style="color:#3b82f6;">P2</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+
+        // Responsive canvas sizing
+        const W = 900;
+        const H = 700;
+        canvas.width = W;
+        canvas.height = H;
+
+        // Game state
+        let gameRunning = false;
+        let gameTime = 0;
+        let winner = null;
+        let cameraY = 0;
+        let targetCameraY = 0;
+
+        // Level dimensions
+        const LEVEL_HEIGHT = 3000;
+        const GRAVITY = 0.55;
+        const JUMP_FORCE = -11;
+        const MOVE_SPEED = 4.5;
+        const FRICTION = 0.85;
+
+        // Input
+        const keys = {};
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+        });
+        window.addEventListener('keyup', e => {
+            keys[e.code] = false;
+        });
+
+        // Portal pairs (colors)
+        const PORTAL_COLORS = [
+            { a: '#f97316', b: '#fb923c', glow: 'rgba(249,115,22,0.4)', name: 'orange' },
+            { a: '#8b5cf6', b: '#a78bfa', glow: 'rgba(139,92,246,0.4)', name: 'purple' },
+            { a: '#ec4899', b: '#f472b6', glow: 'rgba(236,72,153,0.4)', name: 'pink' },
+            { a: '#14b8a6', b: '#2dd4bf', glow: 'rgba(20,184,166,0.4)', name: 'teal' },
+            { a: '#eab308', b: '#facc15', glow: 'rgba(234,179,8,0.4)', name: 'yellow' },
+        ];
+
+        // Platforms & portals & goal
+        let platforms = [];
+        let portals = [];
+        let goal = {};
+        let particles = [];
+
+        function createLevel() {
+            platforms = [];
+            portals = [];
+            particles = [];
+
+            // Ground
+            platforms.push({ x: 0, y: LEVEL_HEIGHT - 30, w: W, h: 30, solid: true, type: 'ground' });
+
+            // Generate platforms going up
+            const sections = 28;
+            const sectionH = (LEVEL_HEIGHT - 200) / sections;
+
+            // Platform layout - hand-crafted for fun gameplay
+            const layouts = [];
+
+            for (let i = 0; i < sections; i++) {
+                const y = LEVEL_HEIGHT - 80 - i * sectionH;
+                const row = i % 5;
+
+                if (row === 0) {
+                    layouts.push({ x: 50, y, w: 200, h: 16 });
+                    layouts.push({ x: 650, y, w: 200, h: 16 });
+                } else if (row === 1) {
+                    layouts.push({ x: 300, y, w: 300, h: 16 });
+                } else if (row === 2) {
+                    layouts.push({ x: 100, y, w: 180, h: 16 });
+                    layouts.push({ x: 400, y, w: 140, h: 16 });
+                    layouts.push({ x: 700, y, w: 150, h: 16 });
+                } else if (row === 3) {
+                    layouts.push({ x: 200, y, w: 220, h: 16 });
+                    layouts.push({ x: 550, y, w: 250, h: 16 });
+                } else {
+                    layouts.push({ x: 30, y, w: 160, h: 16 });
+                    layouts.push({ x: 350, y, w: 200, h: 16 });
+                    layouts.push({ x: 720, y, w: 150, h: 16 });
+                }
+            }
+
+            layouts.forEach(p => {
+                platforms.push({ ...p, solid: false, type: 'platform' });
+            });
+
+            // Walls
+            platforms.push({ x: -20, y: 0, w: 22, h: LEVEL_HEIGHT, solid: true, type: 'wall' });
+            platforms.push({ x: W - 2, y: 0, w: 22, h: LEVEL_HEIGHT, solid: true, type: 'wall' });
+
+            // Create portal pairs - placed on specific platforms
+            const portalPlatforms = layouts.filter((_, i) => i > 1);
+            const usedIndices = new Set();
+
+            for (let i = 0; i < 5 && portalPlatforms.length >= 2; i++) {
+                let a, b;
+                let attempts = 0;
+                do {
+                    a = Math.floor(Math.random() * portalPlatforms.length);
+                    attempts++;
+                } while (usedIndices.has(a) && attempts < 50);
+                usedIndices.add(a);
+
+                attempts = 0;
+                do {
+                    b = Math.floor(Math.random() * portalPlatforms.length);
+                    attempts++;
+                } while ((usedIndices.has(b) || Math.abs(a - b) < 2) && attempts < 50);
+                usedIndices.add(b);
+
+                const pA = portalPlatforms[a];
+                const pB = portalPlatforms[b];
+
+                if (pA && pB) {
+                    portals.push({
+                        id: i,
+                        color: PORTAL_COLORS[i],
+                        x1: pA.x + pA.w / 2 - 15, y1: pA.y - 50,
+                        x2: pB.x + pB.w / 2 - 15, y2: pB.y - 50,
+                        w: 30, h: 50,
+                        cooldown1: 0, cooldown2: 0,
+                        animPhase: Math.random() * Math.PI * 2
+                    });
+                }
+            }
+
+            // Goal at the very top
+            goal = { x: W / 2 - 40, y: 80, w: 80, h: 60 };
+            // Top platform for goal
+            platforms.push({ x: W / 2 - 100, y: 140, w: 200, h: 16, solid: false, type: 'platform' });
+            // A couple more near the top to help reach it
+            platforms.push({ x: 150, y: 260, w: 200, h: 16, solid: false, type: 'platform' });
+            platforms.push({ x: 550, y: 260, w: 200, h: 16, solid: false, type: 'platform' });
+        }
+
+        class Player {
+            constructor(color, colorLight, startX, controls) {
+                this.color = color;
+                this.colorLight = colorLight;
+                this.startX = startX;
+                this.controls = controls;
+                this.w = 24;
+                this.h = 32;
+                this.reset();
+            }
+
+            reset() {
+                this.x = this.startX;
+                this.y = LEVEL_HEIGHT - 70;
+                this.vx = 0;
+                this.vy = 0;
+                this.onGround = false;
+                this.jumping = false;
+                this.facingRight = true;
+                this.portalCooldown = 0;
+                this.dropThrough = false;
+                this.finished = false;
+                this.finishTime = 0;
+                this.jumpBuffer = 0;
+                this.coyoteTime = 0;
+                this.trail = [];
+            }
+
+            update() {
+                if (this.finished) return;
+
+                const left = keys[this.controls.left];
+                const right = keys[this.controls.right];
+                const jump = keys[this.controls.jump];
+                const down = keys[this.controls.down];
+
+                // Horizontal movement
+                if (left) { this.vx -= MOVE_SPEED * 0.3; this.facingRight = false; }
+                if (right) { this.vx += MOVE_SPEED * 0.3; this.facingRight = true; }
+                this.vx *= FRICTION;
+                if (Math.abs(this.vx) > MOVE_SPEED) this.vx = MOVE_SPEED * Math.sign(this.vx);
+
+                // Jump buffering
+                if (jump && !this.jumping) {
+                    this.jumpBuffer = 8;
+                }
+                if (this.jumpBuffer > 0) this.jumpBuffer--;
+
+                // Coyote time
+                if (this.onGround) this.coyoteTime = 6;
+                else this.coyoteTime--;
+
+                // Jump
+                if (this.jumpBuffer > 0 && this.coyoteTime > 0) {
+                    this.vy = JUMP_FORCE;
+                    this.jumping = true;
+                    this.jumpBuffer = 0;
+                    this.coyoteTime = 0;
+                    // Jump particles
+                    for (let i = 0; i < 6; i++) {
+                        particles.push(createParticle(this.x + this.w / 2, this.y + this.h, this.colorLight, 'jump'));
+                    }
+                }
+                if (!jump) this.jumping = false;
+
+                // Variable jump height
+                if (!jump && this.vy < -3) {
+                    this.vy *= 0.85;
+                }
+
+                // Drop through
+                this.dropThrough = down;
+
+                // Gravity
+                this.vy += GRAVITY;
+                if (this.vy > 15) this.vy = 15;
+
+                // Move X
+                this.x += this.vx;
+                this.onGround = false;
+
+                // Collision X
+                for (const p of platforms) {
+                    if (p.type === 'wall' || p.solid) {
+                        if (this.overlaps(p)) {
+                            if (this.vx > 0) this.x = p.x - this.w;
+                            else if (this.vx < 0) this.x = p.x + p.w;
+                            this.vx = 0;
+                        }
+                    }
+                }
+
+                // Move Y
+                this.y += this.vy;
+
+                // Collision Y
+                for (const p of platforms) {
+                    if (this.overlaps(p)) {
+                        if (p.solid || p.type === 'ground') {
+                            if (this.vy > 0) {
+                                this.y = p.y - this.h;
+                                this.vy = 0;
+                                this.onGround = true;
+                            } else if (this.vy < 0 && p.type !== 'ground') {
+                                this.y = p.y + p.h;
+                                this.vy = 0;
+                            }
+                        } else if (!this.dropThrough && this.vy > 0) {
+                            // One-way platform: only collide from top
+                            const prevBottom = this.y - this.vy + this.h; // was above?
+                            if (prevBottom <= p.y + 4) {
+                                this.y = p.y - this.h;
+                                this.vy = 0;
+                                this.onGround = true;
+                            }
+                        }
+                    }
+                }
+
+                // Wrap horizontal (in case they get past walls somehow)
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.w > W) this.x = W - this.w;
+
+                // Portals
+                if (this.portalCooldown > 0) this.portalCooldown--;
+                if (this.portalCooldown <= 0) {
+                    for (const portal of portals) {
+                        const p1 = { x: portal.x1, y: portal.y1, w: portal.w, h: portal.h };
+                        const p2 = { x: portal.x2, y: portal.y2, w: portal.w, h: portal.h };
+
+                        if (this.overlapsRect(p1) && portal.cooldown1 <= 0) {
+                            this.x = portal.x2 + portal.w / 2 - this.w / 2;
+                            this.y = portal.y2;
+                            this.portalCooldown = 30;
+                            portal.cooldown1 = 20;
+                            // Portal particles
+                            for (let i = 0; i < 12; i++) {
+                                particles.push(createParticle(portal.x2 + portal.w / 2, portal.y2 + portal.h / 2, portal.color.a, 'portal'));
+                            }
+                            break;
+                        }
+                        if (this.overlapsRect(p2) && portal.cooldown2 <= 0) {
+                            this.x = portal.x1 + portal.w / 2 - this.w / 2;
+                            this.y = portal.y1;
+                            this.portalCooldown = 30;
+                            portal.cooldown2 = 20;
+                            for (let i = 0; i < 12; i++) {
+                                particles.push(createParticle(portal.x1 + portal.w / 2, portal.y1 + portal.h / 2, portal.color.a, 'portal'));
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // Goal check
+                if (this.overlapsRect(goal)) {
+                    this.finished = true;
+                    this.finishTime = gameTime;
+                    if (!winner) {
+                        winner = this;
+                    }
+                }
+
+                // Trail
+                this.trail.push({ x: this.x + this.w / 2, y: this.y + this.h / 2, life: 15 });
+                if (this.trail.length > 15) this.trail.shift();
+            }
+
+            overlaps(rect) {
+                return this.x < rect.x + rect.w && this.x + this.w > rect.x &&
+                    this.y < rect.y + rect.h && this.y + this.h > rect.y;
+            }
+
+            overlapsRect(rect) {
+                return this.x < rect.x + rect.w && this.x + this.w > rect.x &&
+                    this.y < rect.y + rect.h && this.y + this.h > rect.y;
+            }
+
+            draw() {
+                const sy = -cameraY;
+
+                // Trail
+                for (let i = 0; i < this.trail.length; i++) {
+                    const t = this.trail[i];
+                    t.life--;
+                    const alpha = (t.life / 15) * 0.3;
+                    ctx.fillStyle = this.color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
+                    const size = (t.life / 15) * 6;
+                    ctx.beginPath();
+                    ctx.arc(t.x, t.y + sy, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                this.trail = this.trail.filter(t => t.life > 0);
+
+                const px = this.x;
+                const py = this.y + sy;
+
+                // Body
+                ctx.save();
+                ctx.shadowColor = this.colorLight;
+                ctx.shadowBlur = 12;
+
+                // Torso
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.roundRect(px + 2, py + 10, this.w - 4, this.h - 12, 4);
+                ctx.fill();
+
+                // Head
+                ctx.fillStyle = this.colorLight;
+                ctx.beginPath();
+                ctx.roundRect(px + 4, py, this.w - 8, 14, 6);
+                ctx.fill();
+
+                // Eyes
+                ctx.fillStyle = '#fff';
+                const eyeDir = this.facingRight ? 2 : -2;
+                ctx.fillRect(px + 8 + eyeDir, py + 4, 3, 4);
+                ctx.fillRect(px + 14 + eyeDir, py + 4, 3, 4);
+                ctx.fillStyle = '#111';
+                ctx.fillRect(px + 9 + eyeDir, py + 5, 2, 2);
+                ctx.fillRect(px + 15 + eyeDir, py + 5, 2, 2);
+
+                // Legs - animate if moving
+                const legAnim = Math.abs(this.vx) > 0.5 ? Math.sin(Date.now() / 80) * 4 : 0;
+                ctx.fillStyle = this.color;
+                ctx.fillRect(px + 5, py + this.h - 4 + legAnim, 5, 4);
+                ctx.fillRect(px + 14, py + this.h - 4 - legAnim, 5, 4);
+
+                ctx.restore();
+
+                // Label
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 10px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(this === p1 ? 'P1' : 'P2', px + this.w / 2, py - 6);
+            }
+        }
+
+        function createParticle(x, y, color, type) {
+            return {
+                x, y,
+                vx: (Math.random() - 0.5) * (type === 'portal' ? 6 : 3),
+                vy: (Math.random() - 0.5) * (type === 'portal' ? 6 : 1) - (type === 'jump' ? 2 : 0),
+                life: type === 'portal' ? 25 : 15,
+                maxLife: type === 'portal' ? 25 : 15,
+                color,
+                size: Math.random() * 4 + 2
+            };
+        }
+
+        let p1, p2;
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('winScreen').style.display = 'none';
+            document.getElementById('hud').style.display = 'flex';
+
+            createLevel();
+
+            p1 = new Player('#ef4444', '#fca5a5', 150, {
+                left: 'KeyA', right: 'KeyD', jump: 'KeyW', down: 'KeyS'
+            });
+            p2 = new Player('#3b82f6', '#93c5fd', W - 200, {
+                left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', down: 'ArrowDown'
+            });
+
+            gameTime = 0;
+            winner = null;
+            gameRunning = true;
+        }
+
+        // Background stars
+        const stars = [];
+        for (let i = 0; i < 120; i++) {
+            stars.push({
+                x: Math.random() * W,
+                y: Math.random() * LEVEL_HEIGHT,
+                size: Math.random() * 2 + 0.5,
+                twinkle: Math.random() * Math.PI * 2,
+                speed: Math.random() * 0.02 + 0.01
+            });
+        }
+
+        function drawBackground() {
+            // Gradient background
+            const grad = ctx.createLinearGradient(0, 0, 0, H);
+            const progress = -cameraY / (LEVEL_HEIGHT - H);
+
+            if (progress < 0.3) {
+                grad.addColorStop(0, '#0a0a2e');
+                grad.addColorStop(1, '#1a0a2e');
+            } else if (progress < 0.6) {
+                grad.addColorStop(0, '#0a1628');
+                grad.addColorStop(1, '#0a0a2e');
+            } else {
+                grad.addColorStop(0, '#0f172a');
+                grad.addColorStop(1, '#0a1628');
+            }
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, H);
+
+            // Stars
+            const sy = -cameraY;
+            for (const star of stars) {
+                star.twinkle += star.speed;
+                const alpha = 0.4 + Math.sin(star.twinkle) * 0.3;
+                const screenY = star.y + sy * 0.3;
+                if (screenY > -10 && screenY < H + 10) {
+                    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(star.x, screenY, star.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        function drawPlatforms() {
+            const sy = -cameraY;
+
+            for (const p of platforms) {
+                const py = p.y + sy;
+                if (py > H + 20 || py + p.h < -20) continue;
+                if (p.type === 'wall') continue;
+
+                if (p.type === 'ground') {
+                    const grad = ctx.createLinearGradient(0, py, 0, py + p.h);
+                    grad.addColorStop(0, '#374151');
+                    grad.addColorStop(1, '#1f2937');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(p.x, py, p.w, p.h);
+                    // Ground detail
+                    ctx.fillStyle = '#4b5563';
+                    for (let gx = 0; gx < p.w; gx += 30) {
+                        ctx.fillRect(p.x + gx, py, 1, p.h);
+                    }
+                } else {
+                    ctx.save();
+                    ctx.shadowColor = 'rgba(148, 130, 255, 0.3)';
+                    ctx.shadowBlur = 8;
+
+                    const grad = ctx.createLinearGradient(p.x, py, p.x + p.w, py);
+                    grad.addColorStop(0, '#4338ca');
+                    grad.addColorStop(0.5, '#6366f1');
+                    grad.addColorStop(1, '#4338ca');
+                    ctx.fillStyle = grad;
+
+                    ctx.beginPath();
+                    ctx.roundRect(p.x, py, p.w, p.h, 4);
+                    ctx.fill();
+
+                    // Highlight
+                    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                    ctx.fillRect(p.x + 4, py + 2, p.w - 8, 3);
+
+                    ctx.restore();
+                }
+            }
+        }
+
+        function drawPortals(time) {
+            const sy = -cameraY;
+
+            for (const portal of portals) {
+                portal.animPhase += 0.05;
+                if (portal.cooldown1 > 0) portal.cooldown1--;
+                if (portal.cooldown2 > 0) portal.cooldown2--;
+
+                const drawPortal = (x, y) => {
+                    const py = y + sy;
+                    if (py > H + 60 || py + portal.h < -60) return;
+
+                    ctx.save();
+
+                    // Glow
+                    ctx.shadowColor = portal.color.a;
+                    ctx.shadowBlur = 20 + Math.sin(portal.animPhase) * 5;
+
+                    // Outer shape
+                    const grad = ctx.createLinearGradient(x, py, x, py + portal.h);
+                    grad.addColorStop(0, portal.color.a);
+                    grad.addColorStop(0.5, portal.color.b);
+                    grad.addColorStop(1, portal.color.a);
+                    ctx.fillStyle = grad;
+
+                    ctx.beginPath();
+                    ctx.ellipse(x + portal.w / 2, py + portal.h / 2, portal.w / 2 + 3, portal.h / 2 + 3, 0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Inner dark
+                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = '#0a0a1a';
+                    ctx.beginPath();
+                    ctx.ellipse(x + portal.w / 2, py + portal.h / 2, portal.w / 2 - 4, portal.h / 2 - 4, 0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Swirl effect
+                    const swirlCount = 3;
+                    for (let i = 0; i < swirlCount; i++) {
+                        const angle = portal.animPhase + (i * Math.PI * 2 / swirlCount);
+                        const rx = Math.cos(angle) * (portal.w / 2 - 8);
+                        const ry = Math.sin(angle) * (portal.h / 2 - 8);
+                        ctx.fillStyle = portal.color.b;
+                        ctx.beginPath();
+                        ctx.arc(x + portal.w / 2 + rx, py + portal.h / 2 + ry, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+
+                    ctx.restore();
+                };
+
+                drawPortal(portal.x1, portal.y1);
+                drawPortal(portal.x2, portal.y2);
+
+                // Draw connection indicator (small colored dot)
+            }
+        }
+
+        function drawGoal() {
+            const sy = -cameraY;
+            const gy = goal.y + sy;
+            if (gy > H + 80 || gy < -80) return;
+
+            const time = Date.now() / 1000;
+
+            ctx.save();
+            ctx.shadowColor = '#22c55e';
+            ctx.shadowBlur = 20 + Math.sin(time * 3) * 10;
+
+            // Flag pole
+            ctx.fillStyle = '#9ca3af';
+            ctx.fillRect(goal.x + goal.w / 2 - 2, gy, 4, goal.h + 10);
+
+            // Flag
+            ctx.fillStyle = '#22c55e';
+            ctx.beginPath();
+            ctx.moveTo(goal.x + goal.w / 2 + 2, gy);
+            ctx.lineTo(goal.x + goal.w / 2 + 40, gy + 12 + Math.sin(time * 4) * 3);
+            ctx.lineTo(goal.x + goal.w / 2 + 2, gy + 24);
+            ctx.closePath();
+            ctx.fill();
+
+            // Star
+            ctx.fillStyle = '#fde047';
+            ctx.font = '18px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('★', goal.x + goal.w / 2 + 20, gy + 18);
+
+            // "GOAL" text
+            ctx.font = 'bold 14px sans-serif';
+            ctx.fillStyle = '#22c55e';
+            const textAlpha = 0.6 + Math.sin(time * 2) * 0.4;
+            ctx.globalAlpha = textAlpha;
+            ctx.fillText('GOAL', goal.x + goal.w / 2, gy - 10);
+            ctx.globalAlpha = 1;
+
+            ctx.restore();
+        }
+
+        function drawParticles() {
+            const sy = -cameraY;
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life--;
+
+                const alpha = p.life / p.maxLife;
+                const screenY = p.y + sy;
+
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.arc(p.x, screenY, p.size * alpha, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function drawHeightIndicator() {
+            // Height progress bar on the side
+            const barX = W - 20;
+            const barY = 50;
+            const barH = H - 100;
+            const barW = 8;
+
+            ctx.fillStyle = 'rgba(255,255,255,0.1)';
+            ctx.beginPath();
+            ctx.roundRect(barX, barY, barW, barH, 4);
+            ctx.fill();
+
+            if (p1 && !p1.finished) {
+                const p1Progress = 1 - (p1.y / LEVEL_HEIGHT);
+                const p1Y = barY + barH - (p1Progress * barH);
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath();
+                ctx.arc(barX + barW / 2, p1Y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            if (p2 && !p2.finished) {
+                const p2Progress = 1 - (p2.y / LEVEL_HEIGHT);
+                const p2Y = barY + barH - (p2Progress * barH);
+                ctx.fillStyle = '#3b82f6';
+                ctx.beginPath();
+                ctx.arc(barX + barW / 2, p2Y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Goal marker
+            const goalProgress = 1 - (goal.y / LEVEL_HEIGHT);
+            const goalY = barY + barH - (goalProgress * barH);
+            ctx.fillStyle = '#22c55e';
+            ctx.fillRect(barX - 2, goalY - 2, barW + 4, 4);
+        }
+
+        function updateCamera() {
+            // Camera follows the higher player (lower Y value)
+            const minY = Math.min(p1.y, p2.y);
+            const maxY = Math.max(p1.y, p2.y);
+            const avgY = (minY + maxY) / 2;
+
+            // Focus more on the higher player but keep both somewhat visible
+            const focusY = minY * 0.6 + avgY * 0.4;
+
+            targetCameraY = -(focusY - H * 0.45);
+            targetCameraY = Math.min(0, Math.max(-(LEVEL_HEIGHT - H), targetCameraY));
+
+            // Smooth camera
+            cameraY += (targetCameraY - cameraY) * 0.08;
+        }
+
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
+
+            if (!gameRunning) {
+                drawBackground();
+                return;
+            }
+
+            gameTime += 1 / 60;
+
+            // Update
+            p1.update();
+            p2.update();
+            updateCamera();
+
+            // Draw
+            drawBackground();
+            drawPlatforms();
+            drawPortals(gameTime);
+            drawGoal();
+            drawParticles();
+            p1.draw();
+            p2.draw();
+            drawHeightIndicator();
+
+            // HUD
+            document.getElementById('p1time').textContent = gameTime.toFixed(1) + 's';
+            document.getElementById('p2time').textContent = gameTime.toFixed(1) + 's';
+
+            // Win check
+            if (winner && !winner._winShown) {
+                winner._winShown = true;
+                setTimeout(() => {
+                    gameRunning = false;
+                    document.getElementById('hud').style.display = 'none';
+                    const winScreen = document.getElementById('winScreen');
+                    winScreen.style.display = 'block';
+
+                    const name = winner === p1 ? 'Player 1 (Red)' : 'Player 2 (Blue)';
+                    const color = winner === p1 ? '#ff6b6b' : '#60a5fa';
+                    document.getElementById('winText').innerHTML = `<span style="color:${color}">${name}</span> Wins!`;
+                    document.getElementById('winTime').textContent = `Time: ${winner.finishTime.toFixed(2)}s`;
+                }, 500);
+            }
+        }
+
+        // RoundRect polyfill for older browsers
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+                if (typeof r === 'number') r = [r, r, r, r];
+                const [tl, tr, br, bl] = r;
+                this.moveTo(x + tl, y);
+                this.lineTo(x + w - tr, y);
+                this.quadraticCurveTo(x + w, y, x + w, y + tr);
+                this.lineTo(x + w, y + h - br);
+                this.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+                this.lineTo(x + bl, y + h);
+                this.quadraticCurveTo(x, y + h, x, y + h - bl);
+                this.lineTo(x, y + tl);
+                this.quadraticCurveTo(x, y, x + tl, y);
+                this.closePath();
+                return this;
+            };
+        }
+
+        // Start render loop
+        gameLoop();
+    </script>
+</body>
+
+</html>

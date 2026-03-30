@@ -94,23 +94,35 @@
         <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
             <div class="flex items-center gap-2 text-gray-400 text-sm font-bold uppercase tracking-wider min-w-fit hidden md:flex">
                 <i class="fa-solid fa-layer-group text-blue-500"></i>
-                <span>Context Window</span>
+                <span id="site-title">Context Window</span>
             </div>
 
-            <div class="flex-1 relative group">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <i class="fa-solid fa-terminal text-gray-500 text-xs"></i>
+            <div class="flex-1 flex gap-4 items-center">
+                <div class="relative min-w-[150px]">
+                    <select id="benchmark-selector" class="block w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 cursor-pointer outline-none">
+                        <!-- Populated by JS -->
+                    </select>
                 </div>
-                <div class="block w-full bg-gray-800 border border-gray-700 rounded-md py-2 pl-10 pr-4 text-sm text-green-400 font-mono shadow-inner">
-                    "Create me a website (game of flappy bird but like modern sleek)"
-                </div>
-                <div class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-700 text-xs text-gray-300 px-2 py-0.5 rounded border border-gray-600">
-                    System Prompt
+                
+                <div class="flex-1 relative group">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-terminal text-gray-500 text-xs"></i>
+                    </div>
+                    <div id="current-prompt" class="block w-full bg-gray-800 border border-gray-700 rounded-md py-2 pl-10 pr-4 text-sm text-green-400 font-mono shadow-inner overflow-hidden text-ellipsis whitespace-nowrap">
+                        Loading...
+                    </div>
+                    <div class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-700 text-xs text-gray-300 px-2 py-0.5 rounded border border-gray-600">
+                        Prompt
+                    </div>
                 </div>
             </div>
 
             <div class="flex items-center gap-3 min-w-fit">
-                <button class="text-gray-400 hover:text-white transition-colors"><i class="fa-solid fa-columns"></i></button>
+                <a href="https://github.com/coder11v/contextwindow" target="_blank" class="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm" title="Contribute on GitHub">
+                    <i class="fa-brands fa-github text-sm"></i>
+                    <span class="hidden sm:inline">Contribute</span>
+                </a>
+                <button onclick="refreshCurrent()" class="text-gray-400 hover:text-white transition-colors" title="Reload Models"><i class="fa-solid fa-rotate"></i></button>
             </div>
         </div>
     </header>
@@ -120,63 +132,77 @@
         <h2 class="mt-6 text-blue-400 font-mono tracking-widest text-sm animate-pulse">INITIALIZING CONTEXT WINDOW...</h2>
     </div>
 
-    <main id="main-grid" class="flex-1 grid grid-cols-1 md:grid-cols-2 grid-rows-2 gap-1 p-1 bg-gray-800 hidden opacity-0 transition-opacity duration-500 relative">
-
-        <div id="card-gemini" class="ai-card relative group border border-gray-700 bg-white overflow-hidden rounded-tl-lg bg-gray-900">
-            <div class="absolute top-3 left-3 right-3 z-20 flex justify-between items-start pointer-events-none">
-                <div class="flex items-center gap-2 bg-gray-900/90 backdrop-blur-md border border-blue-500/30 text-white px-3 py-1.5 rounded-full shadow-lg">
-                    <div class="w-2 h-2 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 animate-pulse"></div>
-                    <span class="text-xs font-semibold tracking-wide">gemini-3-pro</span>
-                </div>
-                <button onclick="toggleFullscreen('card-gemini')" class="fullscreen-trigger pointer-events-auto bg-gray-800/80 hover:bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center border border-gray-600 hover:border-blue-400 backdrop-blur shadow-lg cursor-pointer">
-                    <i class="fa-solid fa-expand text-xs"></i>
-                </button>
-            </div>
-            <iframe class="w-full h-full bg-white" src="/gemini"></iframe>
-        </div>
-
-        <div id="card-gpt" class="ai-card relative group border border-gray-700 bg-white overflow-hidden rounded-tr-lg md:rounded-tr-lg bg-gray-900">
-            <div class="absolute top-3 left-3 right-3 z-20 flex justify-between items-start pointer-events-none">
-                <div class="flex items-center gap-2 bg-gray-900/90 backdrop-blur-md border border-teal-500/30 text-white px-3 py-1.5 rounded-full shadow-lg">
-                    <div class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></div>
-                    <span class="text-xs font-semibold tracking-wide">gpt-5.1-high</span>
-                </div>
-                <button onclick="toggleFullscreen('card-gpt')" class="fullscreen-trigger pointer-events-auto bg-gray-800/80 hover:bg-teal-600 text-white w-8 h-8 rounded-full flex items-center justify-center border border-gray-600 hover:border-teal-400 backdrop-blur shadow-lg cursor-pointer">
-                    <i class="fa-solid fa-expand text-xs"></i>
-                </button>
-            </div>
-            <iframe class="w-full h-full bg-white" src="/gpt"></iframe>
-        </div>
-
-        <div id="card-claude" class="ai-card relative group border border-gray-700 bg-white overflow-hidden rounded-bl-lg md:rounded-bl-lg bg-gray-900">
-            <div class="absolute top-3 left-3 right-3 z-20 flex justify-between items-start pointer-events-none">
-                <div class="flex items-center gap-2 bg-gray-900/90 backdrop-blur-md border border-orange-500/30 text-white px-3 py-1.5 rounded-full shadow-lg">
-                    <div class="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></div>
-                    <span class="text-xs font-semibold tracking-wide">claude-opus</span>
-                </div>
-                <button onclick="toggleFullscreen('card-claude')" class="fullscreen-trigger pointer-events-auto bg-gray-800/80 hover:bg-orange-600 text-white w-8 h-8 rounded-full flex items-center justify-center border border-gray-600 hover:border-orange-400 backdrop-blur shadow-lg cursor-pointer">
-                    <i class="fa-solid fa-expand text-xs"></i>
-                </button>
-            </div>
-            <iframe class="w-full h-full bg-white" src="/claude"></iframe>
-        </div>
-
-        <div id="card-grok" class="ai-card relative group border border-gray-700 bg-white overflow-hidden rounded-br-lg bg-gray-900">
-            <div class="absolute top-3 left-3 right-3 z-20 flex justify-between items-start pointer-events-none">
-                <div class="flex items-center gap-2 bg-gray-900/90 backdrop-blur-md border border-gray-400/30 text-white px-3 py-1.5 rounded-full shadow-lg">
-                    <div class="w-2 h-2 rounded-full bg-gray-100 animate-pulse"></div>
-                    <span class="text-xs font-semibold tracking-wide">grok-4.1</span>
-                </div>
-                <button onclick="toggleFullscreen('card-grok')" class="fullscreen-trigger pointer-events-auto bg-gray-800/80 hover:bg-gray-600 text-white w-8 h-8 rounded-full flex items-center justify-center border border-gray-600 hover:border-gray-400 backdrop-blur shadow-lg cursor-pointer">
-                    <i class="fa-solid fa-expand text-xs"></i>
-                </button>
-            </div>
-            <iframe class="w-full h-full bg-white" src="/grok"></iframe>
-        </div>
-
+    <main id="main-grid" class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-1 p-1 bg-gray-800 hidden opacity-0 transition-opacity duration-500 relative overflow-y-auto">
+        <!-- AI cards will be injected here -->
     </main>
 
     <script>
+        let configData = [];
+        let currentBenchmarkId = null;
+
+        // --- FETCH CONFIG ---
+        async function fetchConfig() {
+            try {
+                const response = await fetch('config.json');
+                configData = await response.json();
+                populateBenchmarkSelector();
+                if (configData.length > 0) {
+                    loadBenchmark(configData[0].id);
+                }
+            } catch (error) {
+                console.error('Error loading config:', error);
+                document.getElementById('current-prompt').innerText = "Error loading config.json";
+            }
+        }
+
+        function populateBenchmarkSelector() {
+            const selector = document.getElementById('benchmark-selector');
+            selector.innerHTML = configData.map(bench => `
+                <option value="${bench.id}">${bench.id.charAt(0).toUpperCase() + bench.id.slice(1)}</option>
+            `).join('');
+            
+            selector.onchange = (e) => loadBenchmark(e.target.value);
+        }
+
+        function loadBenchmark(id) {
+            const benchmark = configData.find(b => b.id === id);
+            if (!benchmark) return;
+            
+            currentBenchmarkId = id;
+            document.getElementById('current-prompt').innerText = benchmark.prompt;
+            
+            const grid = document.getElementById('main-grid');
+            grid.innerHTML = '';
+            
+            benchmark.models.forEach((model, index) => {
+                const card = document.createElement('div');
+                card.id = `card-${id}-${model.id}`;
+                card.className = `ai-card relative group border border-gray-700 bg-white overflow-hidden bg-gray-900 h-[600px] md:h-auto min-h-[400px]`;
+                
+                // Color mapping for badges
+                const colors = ['blue', 'teal', 'orange', 'purple', 'green', 'pink', 'yellow'];
+                const color = colors[index % colors.length];
+                
+                card.innerHTML = `
+                    <div class="absolute top-3 left-3 right-3 z-20 flex justify-between items-start pointer-events-none">
+                        <div class="flex items-center gap-2 bg-gray-900/90 backdrop-blur-md border border-${color}-500/30 text-white px-3 py-1.5 rounded-full shadow-lg">
+                            <div class="w-2 h-2 rounded-full bg-${color}-400 animate-pulse"></div>
+                            <span class="text-xs font-semibold tracking-wide">${model.name || model.id}</span>
+                        </div>
+                        <button onclick="toggleFullscreen('${card.id}')" class="fullscreen-trigger pointer-events-auto bg-gray-800/80 hover:bg-${color}-600 text-white w-8 h-8 rounded-full flex items-center justify-center border border-gray-600 hover:border-${color}-400 backdrop-blur shadow-lg cursor-pointer">
+                            <i class="fa-solid fa-expand text-xs"></i>
+                        </button>
+                    </div>
+                    <iframe class="w-full h-full bg-white" src="${model.path}"></iframe>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function refreshCurrent() {
+            if (currentBenchmarkId) loadBenchmark(currentBenchmarkId);
+        }
+
         // --- MODAL LOGIC ---
         function closeModal() {
             const modal = document.getElementById('info-modal');
@@ -194,9 +220,10 @@
         function showModal() {
             const modal = document.getElementById('info-modal');
             const modalContent = document.getElementById('info-modal-card');
-            
+            if (!modal) return;
             modal.classList.remove('pointer-events-none');
             modal.style.opacity = '1';
+            modal.style.display = 'flex';
             
             modalContent.classList.remove('scale-95');
             modalContent.classList.add('scale-100');
@@ -204,6 +231,7 @@
 
         // --- 1. LOADING SEQUENCE ---
         window.addEventListener('load', () => {
+            fetchConfig();
             setTimeout(() => {
                 const loader = document.getElementById('loader-overlay');
                 const grid = document.getElementById('main-grid');
@@ -215,7 +243,6 @@
                     grid.classList.remove('hidden');
                     requestAnimationFrame(() => { grid.style.opacity = '1'; });
                     
-                    // TRIGGER POPUP HERE (After grid appears)
                     setTimeout(() => {
                         showModal();
                     }, 600);
@@ -225,11 +252,8 @@
         });
 
         // --- 2. FLUID FULLSCREEN ANIMATION LOGIC ---
-        // We use explicit style manipulation for the transition because
-        // transitioning from Grid (static) to Fixed requires calculating coordinates.
-        
         let activeCardId = null;
-        let originalRect = null; // Stores the position to return to
+        let originalRect = null;
 
         function toggleFullscreen(cardId) {
             const card = document.getElementById(cardId);
@@ -237,18 +261,11 @@
             const isExpanding = !card.classList.contains('is-fullscreen');
 
             if (isExpanding) {
-                // --- EXPANDING ---
-                
-                // 1. Prevent multiple cards from expanding
                 if (activeCardId && activeCardId !== cardId) return; 
                 activeCardId = cardId;
-
-                // 2. Get current coordinates (where the card is in the grid)
                 const rect = card.getBoundingClientRect();
-                originalRect = rect; // Save for later
+                originalRect = rect;
 
-                // 3. Set initial fixed styles to MATCH the grid position exactly
-                // This prevents the visual "snap"
                 card.style.position = 'fixed';
                 card.style.top = rect.top + 'px';
                 card.style.left = rect.left + 'px';
@@ -257,31 +274,20 @@
                 card.style.zIndex = '50';
                 card.style.margin = '0';
                 
-                // 4. Add transition class for smooth animation
-                // We add this AFTER setting the initial fixed position
                 requestAnimationFrame(() => {
-                    card.style.transition = 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)'; // "Spring-like" ease
-                    
-                    // 5. Set target styles (Full screen)
+                    card.style.transition = 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)';
                     requestAnimationFrame(() => {
                         card.classList.add('is-fullscreen');
                         document.body.classList.add('has-fullscreen-active');
-                        
                         card.style.top = '0';
                         card.style.left = '0';
                         card.style.width = '100vw';
                         card.style.height = '100vh';
-                        
-                        // Change Icon
                         btnIcon.classList.remove('fa-expand');
                         btnIcon.classList.add('fa-compress');
                     });
                 });
-
             } else {
-                // --- COLLAPSING ---
-                
-                // 1. Target styles: Go back to the saved coordinates
                 card.style.top = originalRect.top + 'px';
                 card.style.left = originalRect.left + 'px';
                 card.style.width = originalRect.width + 'px';
@@ -289,13 +295,9 @@
                 
                 card.classList.remove('is-fullscreen');
                 document.body.classList.remove('has-fullscreen-active');
-
-                // Change Icon back
                 btnIcon.classList.remove('fa-compress');
                 btnIcon.classList.add('fa-expand');
 
-                // 2. Wait for transition to finish, then clean up styles
-                // so it snaps back into the CSS Grid flow naturally
                 setTimeout(() => {
                     card.style.position = '';
                     card.style.top = '';
@@ -303,19 +305,17 @@
                     card.style.width = '';
                     card.style.height = '';
                     card.style.zIndex = '';
-                    card.style.transition = ''; // Remove inline transition so CSS takes over
+                    card.style.transition = '';
                     activeCardId = null;
-                }, 500); // Match transition duration
+                }, 500);
             }
         }
 
-        // Listen for ESC key to close
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 if (activeCardId) toggleFullscreen(activeCardId);
-                // Also close modal if open
                 const modal = document.getElementById('info-modal');
-                if (modal.style.opacity === '1') closeModal();
+                if (modal && modal.style.opacity === '1') closeModal();
             }
         });
     </script>

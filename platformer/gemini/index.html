@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Climber - 2 Player Racing</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            background-color: #0f172a;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: 'Press Start 2P', system-ui, sans-serif;
+            overflow: hidden;
+        }
+
+        canvas {
+            background-color: #1e293b;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+            border: 4px solid #334155;
+            border-radius: 8px;
+            image-rendering: pixelated;
+        }
+
+        .crt::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 50;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body class="crt">
+    <div id="game-container" class="relative">
+        <div id="ui" class="absolute top-4 w-full text-center pointer-events-none z-10">
+            <h1 class="text-2xl md:text-3xl text-white mb-2 tracking-widest" style="text-shadow: 2px 2px 0 #000;">PORTAL
+                CLIMBER</h1>
+            <p class="text-[10px] md:text-xs text-gray-300" style="text-shadow: 1px 1px 0 #000;">
+                <span class="text-red-400">P1: WASD</span> | <span class="text-blue-400">P2: ARROWS</span>
+            </p>
+        </div>
+
+        <div id="overlay"
+            class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20 hidden backdrop-blur-sm bg-black/50 rounded-lg">
+            <h2 id="winner-text" class="text-3xl md:text-5xl font-bold mb-8 text-center"
+                style="text-shadow: 4px 4px 0 #000;"></h2>
+            <button id="restart-btn"
+                class="pointer-events-auto font-bold px-6 py-4 bg-yellow-400 hover:bg-yellow-300 text-black text-sm md:text-lg rounded shadow-[4px_4px_0_#000] hover:shadow-[2px_2px_0_#000] hover:translate-y-[2px] hover:translate-x-[2px] transition-all cursor-pointer"
+                style="font-family: 'Press Start 2P', system-ui;" onclick="resetGame()">PLAY AGAIN</button>
+        </div>
+
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const winnerText = document.getElementById('winner-text');
+        const overlay = document.getElementById('overlay');
+
+        // Game state
+        let gameOver = false;
+        let time = 0;
+
+        // Input handling
+        const keys = {};
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        // Classes
+        class Player {
+            constructor(startX, startY, color, controls, name) {
+                this.startX = startX;
+                this.startY = startY;
+                this.x = startX;
+                this.y = startY;
+                this.width = 24;
+                this.height = 24;
+                this.color = color;
+                this.controls = controls;
+                this.name = name;
+                this.vx = 0;
+                this.vy = 0;
+                this.speed = 5;
+                this.jumpForce = -10.5;
+                this.gravity = 0.4;
+                this.grounded = false;
+                this.portalCooldown = 0;
+                this.particles = [];
+            }
+
+            update(platforms, portals, goal) {
+                if (gameOver) return;
+
+                // Portal cooldown
+                if (this.portalCooldown > 0) this.portalCooldown--;
+
+                // Horizontal movement
+                let moveDir = 0;
+                if (keys[this.controls.left]) moveDir -= 1;
+                if (keys[this.controls.right]) moveDir += 1;
+
+                if (moveDir !== 0) {
+                    this.vx += moveDir * 0.6;
+                    if (this.vx < -this.speed) this.vx = -this.speed;
+                    if (this.vx > this.speed) this.vx = this.speed;
+                } else {
+                    this.vx *= 0.8; // Friction
+                    if (Math.abs(this.vx) < 0.1) this.vx = 0;
+                }
+
+                // Jump
+                if (keys[this.controls.jump] && this.grounded) {
+                    this.vy = this.jumpForce;
+                    this.grounded = false;
+                    this.createParticles(10);
+                }
+
+                // Gravity
+                this.vy += this.gravity;
+                if (this.vy > 12) this.vy = 12; // Terminal velocity
+
+                // X Collision
+                this.x += this.vx;
+                this.collide(platforms, 'x');
+
+                // Y Collision
+                this.y += this.vy;
+                this.grounded = false;
+                this.collide(platforms, 'y');
+
+                // Screen bounds (Walls)
+                if (this.x < 0) { this.x = 0; this.vx = 0; }
+                if (this.x + this.width > canvas.width) { this.x = canvas.width - this.width; this.vx = 0; }
+
+                // Fall into pit
+                if (this.y > canvas.height + 50) {
+                    this.die();
+                }
+
+                // Portals
+                if (this.portalCooldown === 0) {
+                    for (let portal of portals) {
+                        if (this.intersects(portal)) {
+                            let dest = portals.find(p => p.id === portal.targetId);
+                            if (dest) {
+                                // Teleport effects
+                                this.createParticles(15, this.color);
+                                // Move player
+                                this.x = dest.x + dest.width / 2 - this.width / 2;
+                                this.y = dest.y + dest.height / 2 - this.height / 2;
+                                this.portalCooldown = 60; // 1 second cooldown
+                                this.vy = -4; // Small bump out of portal
+                                this.createParticles(15, dest.color);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Goal
+                if (this.intersects(goal)) {
+                    gameOver = true;
+                    winnerText.innerText = `${this.name} WINS!`;
+                    winnerText.style.color = this.color;
+                    overlay.classList.remove('hidden');
+                }
+
+                this.updateParticles();
+            }
+
+            die() {
+                this.createParticles(20, '#ffffff'); // Death explosion
+                this.x = this.startX;
+                this.y = this.startY;
+                this.vx = 0;
+                this.vy = 0;
+            }
+
+            collide(platforms, dir) {
+                for (let p of platforms) {
+                    if (this.intersects(p)) {
+                        if (dir === 'x') {
+                            if (this.vx > 0) this.x = p.x - this.width;
+                            else if (this.vx < 0) this.x = p.x + p.width;
+                            this.vx = 0;
+                        } else if (dir === 'y') {
+                            if (this.vy > 0) { // Landing on platform
+                                this.y = p.y - this.height;
+                                this.grounded = true;
+                            } else if (this.vy < 0) { // Hitting ceiling
+                                this.y = p.y + p.height;
+                            }
+                            this.vy = 0;
+                        }
+                    }
+                }
+            }
+
+            intersects(rect) {
+                return this.x < rect.x + rect.width &&
+                    this.x + this.width > rect.x &&
+                    this.y < rect.y + rect.height &&
+                    this.y + this.height > rect.y;
+            }
+
+            createParticles(count, color = null) {
+                for (let i = 0; i < count; i++) {
+                    this.particles.push({
+                        x: this.x + this.width / 2,
+                        y: this.y + this.height,
+                        vx: (Math.random() - 0.5) * 5,
+                        vy: (Math.random() - 1) * 5,
+                        life: 1,
+                        color: color || this.color
+                    });
+                }
+            }
+
+            updateParticles() {
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    let p = this.particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.life -= 0.04;
+                    if (p.life <= 0) this.particles.splice(i, 1);
+                }
+            }
+
+            draw() {
+                // Draw particles
+                this.particles.forEach(p => {
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.life;
+                    ctx.fillRect(p.x, p.y, 4, 4);
+                });
+                ctx.globalAlpha = 1;
+
+                // Draw player body
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+
+                // Draw eyes (looking in movement direction)
+                ctx.fillStyle = 'white';
+                let eyeOffset = this.vx > 0.5 ? 4 : (this.vx < -0.5 ? -4 : 0);
+                ctx.fillRect(this.x + 4 + eyeOffset, this.y + 4, 4, 4);
+                ctx.fillRect(this.x + 16 + eyeOffset, this.y + 4, 4, 4);
+
+                // Portal cooldown indicator bar
+                if (this.portalCooldown > 0) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                    ctx.fillRect(this.x, this.y - 8, this.width * (this.portalCooldown / 60), 4);
+                }
+            }
+        }
+
+        // Level Design
+        const platforms = [
+            // Left & Right Floors (Pit in the center)
+            { x: 0, y: 580, width: 250, height: 20 },
+            { x: 550, y: 580, width: 250, height: 20 },
+
+            // Level 1
+            { x: 0, y: 480, width: 150, height: 20 },
+            { x: 650, y: 480, width: 150, height: 20 },
+
+            // Level 2 (Center crossover)
+            { x: 280, y: 380, width: 240, height: 20 },
+
+            // Level 3
+            { x: 0, y: 280, width: 150, height: 20 },
+            { x: 650, y: 280, width: 150, height: 20 },
+
+            // Level 4 (High up, accessible via portals)
+            { x: 0, y: 140, width: 150, height: 20 },
+            { x: 650, y: 140, width: 150, height: 20 },
+
+            // Goal Platform (Top center)
+            { x: 300, y: 80, width: 200, height: 20 }
+        ];
+
+        const portals = [
+            // Portal A (Green): Takes player from Left Level 3 to Right Level 4
+            { id: 1, targetId: 2, x: 50, y: 230, width: 40, height: 50, color: '#10b981' },
+            { id: 2, targetId: 1, x: 700, y: 90, width: 40, height: 50, color: '#10b981' },
+
+            // Portal B (Purple): Takes player from Right Level 3 to Left Level 4
+            { id: 3, targetId: 4, x: 710, y: 230, width: 40, height: 50, color: '#8b5cf6' },
+            { id: 4, targetId: 3, x: 40, y: 90, width: 40, height: 50, color: '#8b5cf6' },
+        ];
+
+        // Goal zone
+        const goal = { x: 350, y: 40, width: 100, height: 40 };
+
+        let p1, p2;
+
+        function init() {
+            p1 = new Player(100, 540, '#f87171', { left: 'KeyA', right: 'KeyD', jump: 'KeyW' }, 'RED');
+            p2 = new Player(660, 540, '#60a5fa', { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp' }, 'BLUE');
+            gameOver = false;
+            overlay.classList.add('hidden');
+        }
+
+        function resetGame() {
+            init();
+        }
+
+        function loop() {
+            // Draw background
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw subtle grid lines for tech feel
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 800; i += 40) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 600); ctx.stroke();
+            }
+            for (let i = 0; i < 600; i += 40) {
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(800, i); ctx.stroke();
+            }
+
+            // Draw platforms with simple 3D effect
+            platforms.forEach(p => {
+                ctx.fillStyle = '#475569'; // Base color
+                ctx.fillRect(p.x, p.y, p.width, p.height);
+                ctx.fillStyle = '#64748b'; // Top highlight
+                ctx.fillRect(p.x, p.y, p.width, 4);
+                ctx.fillStyle = '#334155'; // Bottom shadow
+                ctx.fillRect(p.x, p.y + p.height - 4, p.width, 4);
+            });
+
+            // Draw Pit danger indicator (pulsing red at the bottom center)
+            ctx.fillStyle = `rgba(239, 68, 68, ${0.1 + Math.sin(time / 10) * 0.1})`;
+            ctx.fillRect(250, 580, 300, 20);
+
+            // Draw goal
+            ctx.fillStyle = '#facc15';
+            ctx.fillRect(goal.x, goal.y, goal.width, goal.height);
+            // Goal pulse effect
+            ctx.fillStyle = `rgba(250, 204, 21, ${0.3 + Math.sin(time / 5) * 0.2})`;
+            ctx.fillRect(goal.x - 5, goal.y - 5, goal.width + 10, goal.height + 10);
+            // Goal text
+            ctx.fillStyle = '#000';
+            ctx.font = '10px "Press Start 2P"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('WIN', goal.x + goal.width / 2, goal.y + goal.height / 2 + 2);
+
+            // Draw portals
+            portals.forEach(p => {
+                // Outer glow
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = 15;
+                ctx.fillStyle = p.color;
+
+                // Ellipse portal shape
+                ctx.beginPath();
+                ctx.ellipse(p.x + p.width / 2, p.y + p.height / 2, p.width / 2, p.height / 2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+
+                // Inner swirling effect
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                let rx = p.width / 3 + Math.sin(time / 5 + p.id) * 2;
+                let ry = p.height / 3 + Math.cos(time / 5 + p.id) * 2;
+                ctx.ellipse(p.x + p.width / 2, p.y + p.height / 2, rx, ry, time / 10, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Update and draw players
+            p1.update(platforms, portals, goal);
+            p2.update(platforms, portals, goal);
+
+            // Draw players (draw winner/higher player last so they appear in front)
+            if (p1.y < p2.y) {
+                p2.draw(); p1.draw();
+            } else {
+                p1.draw(); p2.draw();
+            }
+
+            time++;
+            requestAnimationFrame(loop);
+        }
+
+        // Start game
+        init();
+        loop();
+    </script>
+</body>
+
+</html>

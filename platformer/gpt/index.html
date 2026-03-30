@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portal Climb Duel</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: #070b17;
+    }
+
+    #game {
+      width: min(96vw, 980px);
+      height: min(96vh, 760px);
+      image-rendering: pixelated;
+      border: 2px solid rgba(148, 163, 184, 0.3);
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.9), 0 30px 70px rgba(0, 0, 0, 0.45);
+      background: linear-gradient(to bottom, #0f172a 0%, #0b1223 45%, #080d19 100%);
+    }
+  </style>
+</head>
+
+<body>
+  <main class="min-h-screen grid place-items-center px-4 py-3">
+    <div class="w-full max-w-6xl">
+      <div class="flex items-center justify-between gap-3 text-slate-200 text-sm mb-2">
+        <p class="font-semibold tracking-wide">Portal Climb Duel</p>
+        <p id="status" class="text-slate-300">Race to the glowing top line</p>
+      </div>
+      <canvas id="game" width="960" height="740" aria-label="Two player platformer"></canvas>
+      <div class="mt-2 text-xs text-slate-300 flex flex-wrap gap-x-5 gap-y-1">
+        <span>P1: W A D (move, jump)</span>
+        <span>P2: Arrow keys (move, jump, fast-fall)</span>
+        <span>R: restart</span>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const statusEl = document.getElementById("status");
+
+    const WORLD = { width: canvas.width, height: canvas.height };
+    const GRAVITY = 0.58;
+    const MOVE_ACCEL = 0.68;
+    const MAX_SPEED_X = 5;
+    const JUMP_VEL = -11.2;
+    const FRICTION_GROUND = 0.82;
+    const FRICTION_AIR = 0.94;
+
+    const keys = new Set();
+    let gameOver = false;
+    let winner = null;
+
+    const controls = {
+      p1: { left: "KeyA", right: "KeyD", jump: "KeyW" },
+      p2: { left: "ArrowLeft", right: "ArrowRight", jump: "ArrowUp", down: "ArrowDown" }
+    };
+
+    const basePlatforms = [
+      { x: 0, y: 706, w: 960, h: 34 },
+      { x: 28, y: 630, w: 190, h: 16 },
+      { x: 300, y: 620, w: 170, h: 16 },
+      { x: 545, y: 640, w: 180, h: 16 },
+      { x: 790, y: 600, w: 145, h: 16 },
+      { x: 56, y: 540, w: 190, h: 16 },
+      { x: 330, y: 520, w: 245, h: 16 },
+      { x: 690, y: 500, w: 205, h: 16 },
+      { x: 104, y: 430, w: 220, h: 16 },
+      { x: 420, y: 410, w: 175, h: 16 },
+      { x: 695, y: 380, w: 220, h: 16 },
+      { x: 18, y: 325, w: 205, h: 16 },
+      { x: 296, y: 300, w: 160, h: 16 },
+      { x: 545, y: 285, w: 170, h: 16 },
+      { x: 770, y: 250, w: 166, h: 16 },
+      { x: 90, y: 215, w: 235, h: 16 },
+      { x: 390, y: 180, w: 260, h: 16 },
+      { x: 735, y: 145, w: 180, h: 16 },
+      { x: 40, y: 115, w: 210, h: 16 },
+      { x: 340, y: 88, w: 210, h: 16 },
+      { x: 665, y: 62, w: 220, h: 16 }
+    ];
+
+    const goal = { y: 34, h: 12 };
+
+    const portals = [
+      {
+        a: { x: 62, y: 602, w: 24, h: 28 },
+        b: { x: 832, y: 488, w: 24, h: 28 },
+        colorA: "#7c3aed",
+        colorB: "#06b6d4"
+      },
+      {
+        a: { x: 136, y: 402, w: 24, h: 28 },
+        b: { x: 800, y: 222, w: 24, h: 28 },
+        colorA: "#f97316",
+        colorB: "#22c55e"
+      },
+      {
+        a: { x: 442, y: 152, w: 24, h: 28 },
+        b: { x: 118, y: 87, w: 24, h: 28 },
+        colorA: "#eab308",
+        colorB: "#f43f5e"
+      }
+    ];
+
+    function makePlayer(name, color, spawnX) {
+      return {
+        name,
+        color,
+        x: spawnX,
+        y: 660,
+        w: 26,
+        h: 38,
+        vx: 0,
+        vy: 0,
+        onGround: false,
+        jumpLatch: false,
+        portalCooldown: 0
+      };
+    }
+
+    const players = [
+      makePlayer("Player 1", "#38bdf8", 95),
+      makePlayer("Player 2", "#fb7185", 160)
+    ];
+
+    function intersects(a, b) {
+      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    }
+
+    function resetGame() {
+      const p1 = players[0];
+      const p2 = players[1];
+
+      Object.assign(p1, makePlayer("Player 1", "#38bdf8", 95));
+      Object.assign(p2, makePlayer("Player 2", "#fb7185", 160));
+
+      gameOver = false;
+      winner = null;
+      statusEl.textContent = "Race to the glowing top line";
+    }
+
+    function applyInput(player, binding) {
+      const left = keys.has(binding.left);
+      const right = keys.has(binding.right);
+      const jump = keys.has(binding.jump);
+      const down = binding.down ? keys.has(binding.down) : false;
+
+      if (left && !right) player.vx -= MOVE_ACCEL;
+      if (right && !left) player.vx += MOVE_ACCEL;
+
+      if (player.onGround && jump && !player.jumpLatch) {
+        player.vy = JUMP_VEL;
+        player.onGround = false;
+      }
+
+      if (down && !player.onGround) {
+        player.vy += 0.34;
+      }
+
+      player.jumpLatch = jump;
+    }
+
+    function resolvePlatforms(player) {
+      player.onGround = false;
+
+      player.x += player.vx;
+      for (const plat of basePlatforms) {
+        if (!intersects(player, plat)) continue;
+        if (player.vx > 0) player.x = plat.x - player.w;
+        if (player.vx < 0) player.x = plat.x + plat.w;
+        player.vx = 0;
+      }
+
+      player.y += player.vy;
+      for (const plat of basePlatforms) {
+        if (!intersects(player, plat)) continue;
+        if (player.vy > 0) {
+          player.y = plat.y - player.h;
+          player.vy = 0;
+          player.onGround = true;
+        } else if (player.vy < 0) {
+          player.y = plat.y + plat.h;
+          player.vy = 0;
+        }
+      }
+
+      if (player.x < 0) {
+        player.x = 0;
+        player.vx = 0;
+      }
+
+      if (player.x + player.w > WORLD.width) {
+        player.x = WORLD.width - player.w;
+        player.vx = 0;
+      }
+
+      if (player.y > WORLD.height + 150) {
+        player.x = player === players[0] ? 95 : 160;
+        player.y = 660;
+        player.vx = 0;
+        player.vy = 0;
+      }
+    }
+
+    function processPortals(player) {
+      if (player.portalCooldown > 0) {
+        player.portalCooldown -= 1;
+        return;
+      }
+
+      for (const pair of portals) {
+        if (intersects(player, pair.a)) {
+          player.x = pair.b.x + (pair.b.w - player.w) / 2;
+          player.y = pair.b.y - player.h - 2;
+          player.vy = Math.min(player.vy, -2);
+          player.portalCooldown = 24;
+          return;
+        }
+
+        if (intersects(player, pair.b)) {
+          player.x = pair.a.x + (pair.a.w - player.w) / 2;
+          player.y = pair.a.y - player.h - 2;
+          player.vy = Math.min(player.vy, -2);
+          player.portalCooldown = 24;
+          return;
+        }
+      }
+    }
+
+    function updatePlayer(player, binding) {
+      applyInput(player, binding);
+
+      player.vx = Math.max(-MAX_SPEED_X, Math.min(MAX_SPEED_X, player.vx));
+      player.vy += GRAVITY;
+      player.vy = Math.min(player.vy, 16.5);
+
+      resolvePlatforms(player);
+      processPortals(player);
+
+      player.vx *= player.onGround ? FRICTION_GROUND : FRICTION_AIR;
+      if (Math.abs(player.vx) < 0.02) player.vx = 0;
+    }
+
+    function checkWin() {
+      if (gameOver) return;
+      for (const player of players) {
+        if (player.y <= goal.y + goal.h) {
+          gameOver = true;
+          winner = player;
+          statusEl.textContent = `${player.name} wins! Press R to play again.`;
+          break;
+        }
+      }
+    }
+
+    function drawBackground(time) {
+      const grad = ctx.createLinearGradient(0, 0, 0, WORLD.height);
+      grad.addColorStop(0, "#111b34");
+      grad.addColorStop(0.45, "#0f172e");
+      grad.addColorStop(1, "#080d18");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, WORLD.width, WORLD.height);
+
+      const twinkle = 0.3 + 0.25 * Math.sin(time * 0.0013);
+      ctx.fillStyle = `rgba(148,163,184,${twinkle.toFixed(3)})`;
+      for (let i = 0; i < 40; i++) {
+        const x = (i * 223) % WORLD.width;
+        const y = (i * 97) % 220;
+        ctx.fillRect(x, y, 2, 2);
+      }
+    }
+
+    function drawGoal(time) {
+      const pulse = 0.55 + Math.sin(time * 0.005) * 0.25;
+      ctx.fillStyle = `rgba(110, 231, 183, ${pulse})`;
+      ctx.fillRect(0, goal.y, WORLD.width, goal.h);
+
+      ctx.strokeStyle = "rgba(167, 243, 208, 0.85)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, goal.y, WORLD.width, goal.h);
+    }
+
+    function drawPlatforms() {
+      for (const plat of basePlatforms) {
+        ctx.fillStyle = "#1e293b";
+        ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
+        ctx.fillStyle = "rgba(148, 163, 184, 0.28)";
+        ctx.fillRect(plat.x, plat.y, plat.w, 3);
+      }
+    }
+
+    function drawPortalGate(portal, color, time) {
+      const pulse = 0.75 + 0.25 * Math.sin(time * 0.01 + portal.x);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.14 + 0.2 * pulse;
+      ctx.fillRect(portal.x - 4, portal.y - 4, portal.w + 8, portal.h + 8);
+
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(portal.x, portal.y, portal.w, portal.h);
+
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.fillRect(portal.x + 4, portal.y + 3, portal.w - 8, portal.h - 6);
+    }
+
+    function drawPortals(time) {
+      for (const pair of portals) {
+        drawPortalGate(pair.a, pair.colorA, time);
+        drawPortalGate(pair.b, pair.colorB, time);
+
+        ctx.strokeStyle = "rgba(125, 211, 252, 0.23)";
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.moveTo(pair.a.x + pair.a.w / 2, pair.a.y + pair.a.h / 2);
+        ctx.lineTo(pair.b.x + pair.b.w / 2, pair.b.y + pair.b.h / 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    function drawPlayers() {
+      for (const p of players) {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+
+        ctx.fillStyle = "rgba(255,255,255,0.6)";
+        ctx.fillRect(p.x + 5, p.y + 8, 6, 6);
+        ctx.fillRect(p.x + p.w - 11, p.y + 8, 6, 6);
+
+        ctx.fillStyle = "rgba(15,23,42,0.95)";
+        ctx.fillRect(p.x + 8, p.y + 22, p.w - 16, 4);
+      }
+    }
+
+    function drawWinnerBanner(time) {
+      if (!winner) return;
+      const alpha = 0.45 + 0.2 * Math.sin(time * 0.008);
+      ctx.fillStyle = `rgba(15, 23, 42, ${alpha.toFixed(3)})`;
+      ctx.fillRect(0, 312, WORLD.width, 120);
+
+      ctx.strokeStyle = winner.color;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(70, 336, WORLD.width - 140, 72);
+
+      ctx.fillStyle = "#e2e8f0";
+      ctx.font = "700 36px ui-sans-serif, system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText(`${winner.name} wins!`, WORLD.width / 2, 384);
+    }
+
+    function frame(time) {
+      drawBackground(time);
+      drawGoal(time);
+      drawPlatforms();
+
+      if (!gameOver) {
+        updatePlayer(players[0], controls.p1);
+        updatePlayer(players[1], controls.p2);
+        checkWin();
+      }
+
+      drawPortals(time);
+      drawPlayers();
+      drawWinnerBanner(time);
+
+      requestAnimationFrame(frame);
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
+        e.preventDefault();
+      }
+
+      keys.add(e.code);
+      if (e.code === "KeyR") resetGame();
+    });
+
+    window.addEventListener("keyup", (e) => {
+      keys.delete(e.code);
+    });
+
+    requestAnimationFrame(frame);
+  </script>
+</body>
+
+</html>

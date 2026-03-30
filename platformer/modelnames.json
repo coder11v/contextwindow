@@ -1,0 +1,18 @@
+[
+    {
+        "id": "gemini",
+        "name": "gemini-3.1-pro-preview"
+    },
+    {
+        "id": "gpt",
+        "name": "gpt-5.3-codex"
+    },
+    {
+        "id": "claude",
+        "name": "claude-opus-4-6-thinking"
+    },
+    {
+        "id": "grok",
+        "name": "grok-code-fast-1"
+    }
+]

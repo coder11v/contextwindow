@@ -1,0 +1,61 @@
+[
+  {
+    "id": "platformer",
+    "prompt": "a two player wasd and ^ <>v (arrow) game\n\n\n\nplatformer get to the top with portals.",
+    "models": [
+      {
+        "id": "gemini",
+        "name": "gemini-3.1-pro-preview",
+        "path": "./platformer/gemini/index.html"
+      }
+      ,
+      {
+        "id": "gpt",
+        "name": "gpt-5.3-codex",
+        "path": "./platformer/gpt/index.html"
+      }
+      ,
+      {
+        "id": "claude",
+        "name": "claude-opus-4-6-thinking",
+        "path": "./platformer/claude/index.html"
+      }
+      ,
+      {
+        "id": "grok",
+        "name": "grok-code-fast-1",
+        "path": "./platformer/grok/index.html"
+      }
+    ]
+  }
+  ,
+  {
+    "id": "flappy",
+    "prompt": "Create me a website (game of flappy bird but like modern sleek)",
+    "models": [
+      {
+        "id": "gemini",
+        "name": "gemini-3-pro",
+        "path": "./flappy/gemini/index.html"
+      }
+      ,
+      {
+        "id": "gpt",
+        "name": "gpt-5.1-high",
+        "path": "./flappy/gpt/index.html"
+      }
+      ,
+      {
+        "id": "claude",
+        "name": "claude-opus-4.5",
+        "path": "./flappy/claude/index.html"
+      }
+      ,
+      {
+        "id": "grok",
+        "name": "grok-4.1",
+        "path": "./flappy/grok/index.html"
+      }
+    ]
+  }
+]
