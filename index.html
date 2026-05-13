@@ -90,39 +90,76 @@
         </div>
     </div>
 
-    <header class="glass-panel border-b border-gray-700 flex-none z-50 shadow-lg transition-opacity duration-500">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-            <div class="flex items-center gap-2 text-gray-400 text-sm font-bold uppercase tracking-wider min-w-fit hidden md:flex">
-                <i class="fa-solid fa-layer-group text-blue-500"></i>
-                <span id="site-title">Context Window</span>
+    <!-- Prompt Modal -->
+    <div id="prompt-modal" class="fixed inset-0 z-[101] flex items-center justify-center bg-black/80 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-500">
+        <div id="prompt-modal-card" class="bg-gray-800 border border-gray-600 rounded-2xl p-8 max-w-2xl w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-500 relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-500 via-blue-500 to-indigo-500"></div>
+            
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                        <i class="fa-solid fa-terminal text-emerald-400 text-lg"></i>
+                    </div>
+                    System Prompt
+                </h3>
+                <button onclick="closePromptModal()" class="w-10 h-10 rounded-full hover:bg-gray-700/50 flex items-center justify-center text-gray-400 hover:text-white transition-all">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
             </div>
 
-            <div class="flex-1 flex gap-4 items-center">
-                <div class="relative min-w-[150px]">
-                    <select id="benchmark-selector" class="block w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 cursor-pointer outline-none">
-                        <!-- Populated by JS -->
-                    </select>
+            <div class="bg-gray-900/80 rounded-xl p-6 border border-gray-700/50 font-mono text-emerald-400/90 text-sm leading-relaxed whitespace-pre-wrap break-words max-h-[50vh] overflow-y-auto custom-scrollbar shadow-inner">
+                <span id="modal-prompt-text"></span>
+            </div>
+
+            <div class="mt-8 flex justify-end gap-3">
+                <button onclick="closePromptModal()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2.5 px-8 rounded-xl transition-all duration-200">
+                    Dismiss
+                </button>
+                <button onclick="copyPrompt()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 px-8 rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg shadow-emerald-900/20">
+                    <i class="fa-solid fa-copy text-sm"></i>
+                    Copy Prompt
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <header class="glass-panel border-b border-gray-700 flex-none z-50 shadow-xl transition-opacity duration-500 py-3">
+        <div class="max-w-7xl mx-auto px-6 flex items-center justify-between gap-6">
+            <div class="flex items-center gap-3 text-gray-300 text-sm font-black uppercase tracking-[0.2em] min-w-fit">
+                <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-900/40">
+                    <i class="fa-solid fa-wind text-white text-xs"></i>
                 </div>
-                
-                <div class="flex-1 relative group">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <i class="fa-solid fa-terminal text-gray-500 text-xs"></i>
+                <span id="site-title" class="hidden sm:inline">Context Window</span>
+            </div>
+
+            <div class="flex-1 flex justify-center max-w-xl">
+                <div class="flex items-center w-full gap-2">
+                    <div class="relative flex-1">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
+                            <i class="fa-solid fa-list-check text-xs"></i>
+                        </div>
+                        <select id="benchmark-selector" class="block w-full bg-gray-800/50 hover:bg-gray-800 border border-gray-700 text-white text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 p-2.5 pl-9 cursor-pointer outline-none transition-all appearance-none">
+                            <!-- Populated by JS -->
+                        </select>
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-500">
+                            <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                        </div>
                     </div>
-                    <div id="current-prompt" class="block w-full bg-gray-800 border border-gray-700 rounded-md py-2 pl-10 pr-4 text-sm text-green-400 font-mono shadow-inner overflow-hidden text-ellipsis whitespace-nowrap">
-                        Loading...
-                    </div>
-                    <div class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-700 text-xs text-gray-300 px-2 py-0.5 rounded border border-gray-600">
-                        Prompt
-                    </div>
+                    
+                    <button onclick="showPrompt()" class="flex items-center gap-2.5 bg-gray-800/50 hover:bg-gray-700 border border-gray-700 hover:border-emerald-500/50 text-gray-300 hover:text-emerald-400 px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm group">
+                        <i class="fa-solid fa-terminal text-emerald-500 group-hover:animate-pulse"></i>
+                        <span class="hidden md:inline">View Prompt</span>
+                    </button>
                 </div>
             </div>
 
-            <div class="flex items-center gap-3 min-w-fit">
-                <a href="https://github.com/coder11v/contextwindow" target="_blank" class="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm" title="Contribute on GitHub">
-                    <i class="fa-brands fa-github text-sm"></i>
-                    <span class="hidden sm:inline">Contribute</span>
+            <div class="flex items-center gap-4 min-w-fit">
+                <a href="https://github.com/coder11v/contextwindow" target="_blank" class="w-10 h-10 flex items-center justify-center bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white rounded-xl transition-all shadow-sm" title="Contribute on GitHub">
+                    <i class="fa-brands fa-github text-lg"></i>
                 </a>
-                <button onclick="refreshCurrent()" class="text-gray-400 hover:text-white transition-colors" title="Reload Models"><i class="fa-solid fa-rotate"></i></button>
+                <button onclick="refreshCurrent()" class="w-10 h-10 flex items-center justify-center bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white rounded-xl transition-all" title="Reload Models">
+                    <i class="fa-solid fa-rotate text-sm"></i>
+                </button>
             </div>
         </div>
     </header>
@@ -169,7 +206,7 @@
             if (!benchmark) return;
             
             currentBenchmarkId = id;
-            document.getElementById('current-prompt').innerText = benchmark.prompt;
+            document.getElementById('modal-prompt-text').innerText = benchmark.prompt;
             
             const grid = document.getElementById('main-grid');
             grid.innerHTML = '';
@@ -214,6 +251,7 @@
             
             setTimeout(() => {
                 modal.style.display = 'none';
+                modal.classList.add('pointer-events-none');
             }, 500);
         }
 
@@ -221,12 +259,58 @@
             const modal = document.getElementById('info-modal');
             const modalContent = document.getElementById('info-modal-card');
             if (!modal) return;
-            modal.classList.remove('pointer-events-none');
-            modal.style.opacity = '1';
             modal.style.display = 'flex';
+            modal.classList.remove('pointer-events-none');
             
-            modalContent.classList.remove('scale-95');
-            modalContent.classList.add('scale-100');
+            requestAnimationFrame(() => {
+                modal.style.opacity = '1';
+                modalContent.classList.remove('scale-95');
+                modalContent.classList.add('scale-100');
+            });
+        }
+
+        // --- PROMPT MODAL LOGIC ---
+        function showPrompt() {
+            const modal = document.getElementById('prompt-modal');
+            const modalContent = document.getElementById('prompt-modal-card');
+            modal.style.display = 'flex';
+            modal.classList.remove('pointer-events-none');
+            
+            requestAnimationFrame(() => {
+                modal.style.opacity = '1';
+                modalContent.classList.remove('scale-95');
+                modalContent.classList.add('scale-100');
+            });
+        }
+
+        function closePromptModal() {
+            const modal = document.getElementById('prompt-modal');
+            const modalContent = document.getElementById('prompt-modal-card');
+            
+            modal.style.opacity = '0';
+            modalContent.classList.remove('scale-100');
+            modalContent.classList.add('scale-95');
+            
+            setTimeout(() => {
+                modal.style.display = 'none';
+                modal.classList.add('pointer-events-none');
+            }, 500);
+        }
+
+        function copyPrompt() {
+            const text = document.getElementById('modal-prompt-text').innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('[onclick="copyPrompt()"]');
+                const originalContent = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-check text-sm"></i> Copied!';
+                btn.classList.remove('bg-emerald-600');
+                btn.classList.add('bg-green-600');
+                setTimeout(() => {
+                    btn.innerHTML = originalContent;
+                    btn.classList.remove('bg-green-600');
+                    btn.classList.add('bg-emerald-600');
+                }, 2000);
+            });
         }
 
         // --- 1. LOADING SEQUENCE ---
@@ -314,8 +398,10 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 if (activeCardId) toggleFullscreen(activeCardId);
-                const modal = document.getElementById('info-modal');
-                if (modal && modal.style.opacity === '1') closeModal();
+                const infoModal = document.getElementById('info-modal');
+                const promptModal = document.getElementById('prompt-modal');
+                if (infoModal && infoModal.style.opacity === '1') closeModal();
+                if (promptModal && promptModal.style.opacity === '1') closePromptModal();
             }
         });
     </script>
