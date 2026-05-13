@@ -56,6 +56,18 @@
             opacity: 0;
             pointer-events: none;
         }
+
+        /* Responsive Grid Adjustments */
+        @media (min-width: 1280px) {
+            .grid-dynamic {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+        @media (min-width: 1600px) {
+            .grid-dynamic {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white h-screen w-screen flex flex-col overflow-hidden font-sans selection:bg-blue-500 selection:text-white">
@@ -169,7 +181,7 @@
         <h2 class="mt-6 text-blue-400 font-mono tracking-widest text-sm animate-pulse">INITIALIZING CONTEXT WINDOW...</h2>
     </div>
 
-    <main id="main-grid" class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-1 p-1 bg-gray-800 hidden opacity-0 transition-opacity duration-500 relative overflow-y-auto">
+    <main id="main-grid" class="flex-1 grid grid-cols-1 md:grid-cols-2 grid-dynamic gap-1 p-1 bg-gray-900 hidden opacity-0 transition-opacity duration-500 relative overflow-y-auto">
         <!-- AI cards will be injected here -->
     </main>
 
@@ -230,7 +242,7 @@
                             <i class="fa-solid fa-expand text-xs"></i>
                         </button>
                     </div>
-                    <iframe class="w-full h-full bg-white" src="${model.path}"></iframe>
+                    <iframe class="w-full h-full bg-gray-900 border-none" src="${model.path}"></iframe>
                 `;
                 grid.appendChild(card);
             });
