@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEON-ORBITER: Event Horizon</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom Neon-Minimalist Noir Styling */
+        :root {
+            --color-cyan: #00f2ff;
+            --color-magenta: #ff00ff;
+            --color-emerald: #00ff88;
+            --bg-color: #0a0a1a;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--color-cyan);
+            font-family: 'JetBrains Mono', monospace;
+            /* High-tech typeface */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            border: 2px solid var(--color-cyan);
+            box-shadow: 0 0 15px var(--color-cyan), inset 0 0 10px rgba(0, 242, 255, 0.5);
+            background-color: #000000;
+        }
+
+        /* Neon Glow Effect using shadowBlur */
+        .neon-glow {
+            filter: drop-shadow(0 0 5px var(--color-cyan)) drop-shadow(0 0 10px var(--color-cyan));
+        }
+
+        .planet-glow {
+            filter: drop-shadow(0 0 5px var(--color-magenta)) drop-shadow(0 0 10px var(--color-magenta));
+        }
+
+        .goal-glow {
+            filter: drop-shadow(0 0 5px var(--color-emerald)) drop-shadow(0 0 10px var(--color-emerald));
+        }
+
+        /* Glitch Effect for UI/Transitions */
+        .glitch-text {
+            animation: glitch 1s infinite alternate;
+        }
+
+        @keyframes glitch {
+            0% {
+                text-shadow: 2px 2px #ff00ff, -2px -2px #00f2ff;
+            }
+
+            25% {
+                text-shadow: -2px 2px #ff00ff, 2px -2px #00f2ff;
+            }
+
+            50% {
+                text-shadow: 2px -2px #ff00ff, -2px 2px #00f2ff;
+            }
+
+            75% {
+                text-shadow: -2px -2px #ff00ff, 2px 2px #00f2ff;
+            }
+
+            100% {
+                text-shadow: 2px 2px #ff00ff, -2px -2px #00f2ff;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="game-container" class="p-4">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui-overlay" class="mt-4 text-sm text-white">
+            <div id="status-message" class="text-center mb-2 text-lg font-bold">Initializing System...</div>
+            <div id="level-display" class="text-center text-xl font-bold">Level: N/A</div>
+            <div id="hint-display" class="text-center text-yellow-400 mt-2 hidden">Hint: Ghost Vector Found!</div>
+        </div>
+    </div>
+
+    <script>
+        // --- CORE GAME SETUP ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusMessage = document.getElementById('status-message');
+        const levelDisplay = document.getElementById('level-display');
+        const hintDisplay = document.getElementById('hint-display');
+
+        const WIDTH = canvas.width;
+        const HEIGHT = canvas.height;
+
+        // --- CONSTANTS & PHYSICS ---
+        const G = 0.1; // Gravitational constant (scaled for game feel)
+        const TIME_STEP = 0.1; // Simulation time step
+        const TRAIL_LENGTH = 50; // How many points to store for the trail
+        const SIMULATION_VECTORS = 5000; // Required for level verification
+
+        // Color Palette
+        const COLOR_PROBE = 'var(--color-cyan)';
+        const COLOR_PLANET = 'var(--color-magenta)';
+        const COLOR_GOAL = 'var(--color-emerald)';
+
+        let gameState = {
+            level: 1,
+            isSolving: false,
+            isSolved: false,
+            ghostVector: null,
+            hintCount: 0,
+            isGameOver: false,
+            startTime: 0,
+            lastUpdateTime: 0,
+            simulationComplete: false,
+        };
+
+        // --- GAME OBJECTS ---
+        let probe = { x: 0, y: 0, vx: 0, vy: 0, mass: 1 };
+        let planets = [];
+        let goal = { x: 0, y: 0, radius: 20 };
+
+        // --- UTILITY FUNCTIONS ---
+
+        function distance(p1, p2) {
+            return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+        }
+
+        function applyNeonGlow(context, x, y, radius, color) {
+            context.shadowBlur = 15;
+            context.shadowColor = color;
+            context.fillStyle = color;
+            context.beginPath();
+            context.arc(x, y, radius, 0, Math.PI * 2);
+            context.fill();
+            context.shadowBlur = 0; // Reset for other drawings
+        }
+
+        // --- LEVEL GENERATION & SOLVER (The Core Logic) ---
+
+        function generateLevel(levelNum) {
+            planets = [];
+
+            // 1. Placement: Start and Goal at opposite ends
+            const startX = WIDTH / 4;
+            const startY = HEIGHT / 2;
+            const goalX = WIDTH * 3 / 4;
+            const goalY = HEIGHT / 2;
+
+            goal.x = goalX;
+            goal.y = goalY;
+            goal.radius = 25;
+
+            // 2. Obstacle Generation (3 to 8 planets)
+            const numPlanets = Math.floor(Math.random() * 6) + 3; // 3 to 8
+
+            const availableX = [50, WIDTH - 50]; // Keep planets away from edges
+            const availableY = [HEIGHT / 4, HEIGHT * 3 / 4];
+
+            for (let i = 0; i < numPlanets; i++) {
+                planets.push({
+                    x: Math.random() * (WIDTH - 100) + 50,
+                    y: Math.random() * (HEIGHT - 100) + 50,
+                    mass: Math.random() * 5 + 1, // Mass between 1 and 6
+                    radius: Math.random() * 10 + 5,
+                    type: Math.random() > 0.8 ? 'blackhole' : 'planet' // Introduce Black Holes for L30+
+                });
+            }
+
+            // 3. Difficulty Scaling (Based on Level Number)
+            const difficulty = levelNum;
+
+            planets.forEach(p => {
+                if (difficulty >= 6) {
+                    // L6-15: Orbital Velocity (Circular Paths)
+                    // Calculate orbital velocity based on distance from center (simplified)
+                    const distFromCenter = distance(p, { x: WIDTH / 2, y: HEIGHT / 2 });
+                    p.vx = (Math.random() * 0.5) * (1 / distFromCenter);
+                    p.vy = -(Math.random() * 0.5) * (1 / distFromCenter);
+                } else if (difficulty >= 16) {
+                    // L16-30: Pulsing Mass (Simulated by changing gravity strength periodically)
+                    p.pulse = Math.random() * 2; // Amplitude of pulse
+                } else if (difficulty >= 30) {
+                    // L30+: Black Hole (Massive, fixed pull, loss condition)
+                    p.mass = 10;
+                }
+            });
+
+            // Reset probe position for simulation start
+            probe.x = startX;
+            probe.y = startY;
+            probe.vx = 0;
+            probe.vy = 0;
+
+            return { planets, goal, start: { x: startX, y: startY }, goal: { x: goalX, y: goalY } };
+        }
+
+        function simulateLaunch(levelNum) {
+            gameState.isSolving = true;
+            gameState.simulationComplete = false;
+            gameState.startTime = performance.now();
+
+            const levelData = generateLevel(levelNum);
+            const { planets, goal, start, goal: goalPos } = levelData;
+
+            // --- Background Simulation Loop (5000 Vectors) ---
+            let successfulVectorFound = false;
+            let attempts = 0;
+
+            const simulationLoop = () => {
+                if (attempts >= SIMULATION_VECTORS) {
+                    gameState.simulationComplete = true;
+                    return;
+                }
+
+                // Random Launch Vector Generation
+                const launchAngle = Math.random() * Math.PI * 2; // Full circle
+                const launchSpeed = Math.random() * 10 + 5; // Initial launch velocity
+
+                let currentProbe = { x: start.x, y: start.y, vx: launchSpeed * Math.cos(launchAngle), vy: launchSpeed * Math.sin(launchAngle) };
+                let reachedGoal = false;
+                let hitPlanet = false;
+                let timeElapsed = 0;
+
+                // Run trajectory simulation for this vector
+                while (timeElapsed < 5000) { // Limit simulation time to prevent infinite loops
+                    const t = timeElapsed;
+
+                    // Apply gravity and movement based on current state
+                    let totalFx = 0;
+                    let totalFy = 0;
+
+                    // 1. Calculate Gravitational Forces
+                    planets.forEach(p => {
+                        if (p.type === 'blackhole') {
+                            // Black Hole effect (loss condition)
+                            const d = distance(currentProbe, p);
+                            if (d < p.radius * 2) {
+                                // Loss condition: Probe consumed by black hole
+                                hitPlanet = true;
+                                break;
+                            }
+                            // Black hole provides massive boost (simplified: just strong pull)
+                            const force = G * p.mass * currentProbe.mass / (d * d);
+                            totalFx += force * (p.x - currentProbe.x) / d;
+                            totalFy += force * (p.y - currentProbe.y) / d;
+                        } else {
+                            // Standard Planet Gravity
+                            const d = distance(currentProbe, p);
+                            if (d > 0.1) {
+                                const force = G * p.mass * currentProbe.mass / (d * d);
+                                totalFx += force * (p.x - currentProbe.x) / d;
+                                totalFy += force * (p.y - currentProbe.y) / d;
+                            }
+                        }
+                    });
+
+                    // 2. Update Velocity (Acceleration)
+                    currentProbe.vx += totalFx * TIME_STEP;
+                    currentProbe.vy += totalFy * TIME_STEP;
+
+                    // 3. Update Position
+                    currentProbe.x += currentProbe.vx * TIME_STEP;
+                    currentProbe.y += currentProbe.vy * TIME_STEP;
+
+                    // Check boundaries
+                    if (currentProbe.x < 0 || currentProbe.x > WIDTH || currentProbe.y < 0 || currentProbe.y > HEIGHT) {
+                        hitPlanet = true; // Exited bounds = Loss
+                        break;
+                    }
+
+                    // Check Goal Condition
+                    if (distance(currentProbe, goalPos) < goal.radius) {
+                        reachedGoal = true;
+                        break;
+                    }
+
+                    timeElapsed += TIME_STEP;
+                }
+
+                // Check Result
+                if (reachedGoal) {
+                    successfulVectorFound = true;
+                    gameState.ghostVector = { x: currentProbe.x, y: currentProbe.y };
+                    break; // Stop simulation once one solution is found
+                } else if (hitPlanet) {
+                    // Loss condition detected during simulation
+                    break;
+                }
+
+                attempts++;
+                // Request next frame for the simulation
+                requestAnimationFrame(simulationLoop);
+            };
+
+            // Start the simulation
+            requestAnimationFrame(simulationLoop);
+        }
+
+
+        // --- RENDERING FUNCTIONS ---
+
+        function drawScene(time) {
+            ctx.fillStyle = 'rgba(10, 10, 26, 0.1)'; // Subtle fade for trail effect
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+            // Draw Goal
+            applyNeonGlow(ctx, goal.x, goal.y, goal.radius, COLOR_GOAL);
+
+            // Draw Planets
+            planets.forEach(p => {
+                applyNeonGlow(ctx, p.x, p.y, p.radius, COLOR_PLANET);
+
+                // L16-30: Pulsing Mass Effect
+                if (gameState.level >= 16 && gameState.level <= 30 && p.pulse) {
+                    const pulse = Math.sin(time * 0.005 + p.x * 0.1) * p.pulse * 2;
+                    const currentRadius = p.radius + pulse;
+                    applyNeonGlow(ctx, p.x, p.y, currentRadius, 'rgba(255, 0, 255, 0.5)');
+                }
+            });
+
+            // Draw Ghost Vector (if found)
+            if (gameState.ghostVector) {
+                ctx.strokeStyle = 'rgba(0, 255, 136, 0.8)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(probe.x, probe.y);
+                ctx.lineTo(gameState.ghostVector.x, gameState.ghostVector.y);
+                ctx.stroke();
+            }
+
+            // Draw Probe Trail (Decaying Tail)
+            ctx.strokeStyle = 'rgba(0, 242, 255, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+
+            // Draw the actual path history
+            for (let i = 0; i < TRAIL_LENGTH; i++) {
+                const trailX = probe.x - (i * (probe.vx / 100)); // Simplified trail based on velocity
+                const trailY = probe.y - (i * (probe.vy / 100));
+
+                if (i === 0) {
+                    ctx.moveTo(trailX, trailY);
+                } else {
+                    ctx.lineTo(trailX, trailY);
+                }
+            }
+            ctx.stroke();
+
+
+            // Draw Probe (Neon Core)
+            applyNeonGlow(ctx, probe.x, probe.y, 5, COLOR_PROBE);
+        }
+
+        // --- GAME LOOP & CONTROL ---
+
+        function updateGame(time) {
+            if (!gameState.isSolving) {
+                // If not solving, just draw the static scene
+                drawScene(time);
+                return;
+            }
+
+            // If solving, the simulation loop handles the physics, we just draw the result
+            drawScene(time);
+
+            if (gameState.simulationComplete) {
+                gameState.isSolving = false;
+
+                if (gameState.ghostVector) {
+                    gameState.isSolved = true;
+                    statusMessage.textContent = `SUCCESS! Level ${gameState.level} Verified. Ghost Vector Found.`;
+                    hintDisplay.classList.remove('hidden');
+                    gameState.hintCount = 1;
+                } else {
+                    gameState.isSolved = false;
+                    statusMessage.textContent = `FAILURE. No solution found after ${SIMULATION_VECTORS} attempts. Re-generating...`;
+                    // Re-generate immediately if failed (as per mandate)
+                    gameState.level++;
+                    simulateLaunch(gameState.level);
+                }
+
+                // Save state
+                localStorage.setItem('highestLevelReached', gameState.level);
+            }
+        }
+
+        function gameLoop(time) {
+            if (!gameState.isSolving) {
+                // Static drawing loop
+                drawScene(time);
+            } else {
+                // Simulation loop (handled by requestAnimationFrame inside simulateLaunch)
+                // We just ensure the main loop keeps running if needed, but the simulation loop is dominant here.
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
+        function initializeGame() {
+            // Load saved state
+            const savedLevel = localStorage.getItem('highestLevelReached');
+            if (savedLevel) {
+                gameState.level = parseInt(savedLevel);
+            }
+
+            // Start the first level simulation
+            simulateLaunch(gameState.level);
+            gameLoop(performance.now());
+        }
+
+        // Start the application
+        initializeGame();
+
+    </script>
+</body>
+
+</html>
