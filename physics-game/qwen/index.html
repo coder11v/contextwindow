@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEON-ORBITER: Event Horizon</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        @keyframes glitch1 {
+
+            0%,
+            100% {
+                clip-path: inset(0 0 95% 0);
+                transform: translate(0)
+            }
+
+            10% {
+                clip-path: inset(20% 0 60% 0);
+                transform: translate(-3px, 2px)
+            }
+
+            30% {
+                clip-path: inset(60% 0 10% 0);
+                transform: translate(3px, -1px)
+            }
+
+            50% {
+                clip-path: inset(10% 0 70% 0);
+                transform: translate(-2px, 3px)
+            }
+
+            70% {
+                clip-path: inset(80% 0 5% 0);
+                transform: translate(2px, -2px)
+            }
+
+            90% {
+                clip-path: inset(40% 0 40% 0);
+                transform: translate(-1px, 1px)
+            }
+        }
+
+        @keyframes glitch2 {
+
+            0%,
+            100% {
+                clip-path: inset(95% 0 0 0);
+                transform: translate(0)
+            }
+
+            10% {
+                clip-path: inset(50% 0 30% 0);
+                transform: translate(3px, -2px)
+            }
+
+            30% {
+                clip-path: inset(10% 0 60% 0);
+                transform: translate(-3px, 1px)
+            }
+
+            50% {
+                clip-path: inset(70% 0 10% 0);
+                transform: translate(2px, -3px)
+            }
+
+            70% {
+                clip-path: inset(5% 0 80% 0);
+                transform: translate(-2px, 2px)
+            }
+
+            90% {
+                clip-path: inset(40% 0 40% 0);
+                transform: translate(1px, -1px)
+            }
+        }
+
+        @keyframes pulse-glow {
+
+            0%,
+            100% {
+                opacity: 0.6
+            }
+
+            50% {
+                opacity: 1
+            }
+        }
+
+        @keyframes warp-stretch {
+            0% {
+                transform: scaleX(1) scaleY(1);
+                filter: brightness(1)
+            }
+
+            50% {
+                transform: scaleX(1.3) scaleY(0.7);
+                filter: brightness(2)
+            }
+
+            100% {
+                transform: scaleX(0) scaleY(2);
+                filter: brightness(3)
+            }
+        }
+
+        @keyframes scanline {
+            0% {
+                transform: translateY(-100%)
+            }
+
+            100% {
+                transform: translateY(100vh)
+            }
+        }
+
+        .glitch-text {
+            position: relative;
+            display: inline-block;
+        }
+
+        .glitch-text::before,
+        .glitch-text::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        .glitch-text::before {
+            color: #ff00ff;
+            animation: glitch1 0.3s infinite;
+        }
+
+        .glitch-text::after {
+            color: #00f2ff;
+            animation: glitch2 0.3s infinite;
+        }
+
+        .scanline-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .scanline-overlay::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: rgba(0, 242, 255, 0.08);
+            animation: scanline 4s linear infinite;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #050510;
+            font-family: 'Share Tech Mono', monospace;
+            cursor: crosshair;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #ui-overlay>* {
+            pointer-events: auto;
+        }
+
+        .hud-text {
+            font-family: 'Share Tech Mono', monospace;
+            text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div class="scanline-overlay"></div>
+
+    <div id="ui-overlay" class="flex flex-col justify-between p-4">
+        <!-- HUD Top -->
+        <div id="hud" class="flex justify-between items-start hidden">
+            <div class="hud-text text-cyan-400 text-sm">
+                <div>LEVEL: <span id="hud-level">1</span></div>
+                <div>ATTEMPTS: <span id="hud-attempts">0</span></div>
+            </div>
+            <div class="hud-text text-center">
+                <div class="text-xs text-gray-500">NEON-ORBITER</div>
+                <div class="text-lg text-cyan-300" id="hud-title">EVENT HORIZON</div>
+            </div>
+            <div class="hud-text text-emerald-400 text-sm text-right">
+                <div>BEST: <span id="hud-best">1</span></div>
+                <div id="hud-hint" class="text-yellow-400 text-xs hidden">[H] HINT</div>
+            </div>
+        </div>
+
+        <!-- Menu Screen -->
+        <div id="menu-screen" class="absolute inset-0 flex flex-col items-center justify-center">
+            <h1 class="glitch-text text-6xl text-cyan-300 mb-2 tracking-widest hud-text" data-text="NEON-ORBITER">
+                NEON-ORBITER</h1>
+            <h2 class="text-2xl text-fuchsia-400 mb-8 tracking-[0.5em] hud-text">EVENT HORIZON</h2>
+            <div class="text-gray-400 text-sm mb-8 text-center hud-text space-y-1">
+                <p>DRAG & RELEASE TO LAUNCH PHOTON PROBE</p>
+                <p>REACH THE SINGULARITY GATE</p>
+                <p>USE GRAVITATIONAL PULL OF STELLAR BODIES</p>
+            </div>
+            <button id="btn-start"
+                class="hud-text text-cyan-400 border border-cyan-400 px-8 py-3 text-lg tracking-widest hover:bg-cyan-400/10 transition-all cursor-pointer">
+                [ INITIALIZE ]
+            </button>
+            <div class="text-gray-600 text-xs mt-4 hud-text" id="menu-best"></div>
+        </div>
+
+        <!-- Generating Screen -->
+        <div id="generating-screen" class="absolute inset-0 flex flex-col items-center justify-center hidden">
+            <div class="text-cyan-400 text-xl hud-text mb-4" id="gen-status">COMPUTING SECTOR MAP...</div>
+            <div class="w-64 h-1 bg-gray-800 rounded overflow-hidden">
+                <div id="gen-bar" class="h-full bg-cyan-400 transition-all" style="width:0%"></div>
+            </div>
+            <div class="text-gray-500 text-xs mt-2 hud-text" id="gen-detail">SECTOR 1</div>
+        </div>
+
+        <!-- Level Complete -->
+        <div id="complete-screen" class="absolute inset-0 flex flex-col items-center justify-center hidden">
+            <h2 class="glitch-text text-5xl text-emerald-400 mb-4 hud-text" data-text="WARP DRIVE ENGAGED">WARP DRIVE
+                ENGAGED</h2>
+            <p class="text-emerald-300 text-lg mb-2 hud-text">SINGULARITY GATE REACHED</p>
+            <p class="text-gray-400 text-sm mb-8 hud-text" id="complete-detail"></p>
+            <button id="btn-next"
+                class="hud-text text-emerald-400 border border-emerald-400 px-8 py-3 text-lg tracking-widest hover:bg-emerald-400/10 transition-all cursor-pointer">
+                [ NEXT SECTOR ]
+            </button>
+        </div>
+
+        <!-- Failed Screen -->
+        <div id="failed-screen" class="absolute inset-0 flex flex-col items-center justify-center hidden">
+            <h2 class="glitch-text text-5xl text-red-500 mb-4 hud-text" data-text="SIGNAL LOST">SIGNAL LOST</h2>
+            <p class="text-red-300 text-lg mb-2 hud-text" id="fail-reason">PROBE DESTROYED</p>
+            <p class="text-gray-400 text-sm mb-8 hud-text" id="fail-detail"></p>
+            <div class="flex gap-4">
+                <button id="btn-retry"
+                    class="hud-text text-cyan-400 border border-cyan-400 px-6 py-3 tracking-widest hover:bg-cyan-400/10 transition-all cursor-pointer">
+                    [ RETRY ]
+                </button>
+                <button id="btn-menu"
+                    class="hud-text text-gray-400 border border-gray-600 px-6 py-3 tracking-widest hover:bg-gray-400/10 transition-all cursor-pointer">
+                    [ MENU ]
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // NEON-ORBITER: EVENT HORIZON
+        // ============================================================
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Constants ---
+        const G_CONST = 800;
+        const PROBE_MASS = 1;
+        const PROBE_RADIUS = 4;
+        const MAX_TRAIL = 200;
+        const SIM_SPEED = 1;
+        const MAX_SIM_STEPS = 3000;
+        const SOLVER_ATTEMPTS = 5000;
+        const GOAL_BASE_RADIUS = 35;
+        const PLANET_MIN_R = 12;
+        const PLANET_MAX_R = 28;
+
+        // --- Colors ---
+        const C_CYAN = '#00f2ff';
+        const C_MAGENTA = '#ff00ff';
+        const C_EMERALD = '#00ff88';
+        const C_BLACKHOLE = '#8800ff';
+        const C_RED = '#ff3344';
+        const C_YELLOW = '#ffdd00';
+
+        // --- State ---
+        let W, H;
+        let state = 'MENU'; // MENU, GENERATING, AIMING, FLYING, COMPLETE, FAILED
+        let level = 1;
+        let attempts = 0;
+        let bestLevel = parseInt(localStorage.getItem('neonOrbiterBest') || '1');
+        let currentLevel = null;
+        let probe = null;
+        let trail = [];
+        let ghostTrail = [];
+        let ghostVector = null;
+        let showHint = false;
+        let shakeAmount = 0;
+        let warpProgress = 0;
+        let particles = [];
+        let grainCanvas, grainCtx;
+        let dragStart = null;
+        let dragCurrent = null;
+        let isDragging = false;
+        let genProgress = 0;
+        let genAttempts = 0;
+        let lastTime = 0;
+        let levelTime = 0;
+        let initialPlanets = [];
+
+        // --- Resize ---
+        function resize() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+            grainCanvas = document.createElement('canvas');
+            grainCanvas.width = W;
+            grainCanvas.height = H;
+            grainCtx = grainCanvas.getContext('2d');
+            generateGrain();
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Grain Texture ---
+        function generateGrain() {
+            const imageData = grainCtx.createImageData(W, H);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const v = Math.random() * 15;
+                data[i] = v; data[i + 1] = v; data[i + 2] = v + 5;
+                data[i + 3] = 20;
+            }
+            grainCtx.putImageData(imageData, 0, 0);
+        }
+
+        // --- Utility ---
+        function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+        function lerp(a, b, t) { return a + (b - a) * t; }
+        function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+        function rand(min, max) { return Math.random() * (max - min) + min; }
+        function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
+
+        // --- Planet Class ---
+        class Planet {
+            constructor(x, y, radius, mass, isBlackHole = false) {
+                this.x = x; this.y = y;
+                this.baseRadius = radius;
+                this.radius = radius;
+                this.mass = mass;
+                this.isBlackHole = isBlackHole;
+                this.orbitCenter = null;
+                this.orbitRadius = 0;
+                this.orbitSpeed = 0;
+                this.orbitAngle = rand(0, Math.PI * 2);
+                this.pulsePhase = rand(0, Math.PI * 2);
+                this.pulseSpeed = 0;
+                this.pulseAmount = 0;
+            }
+
+            update(dt) {
+                if (this.orbitCenter) {
+                    this.orbitAngle += this.orbitSpeed * dt;
+                    this.x = this.orbitCenter.x + Math.cos(this.orbitAngle) * this.orbitRadius;
+                    this.y = this.orbitCenter.y + Math.sin(this.orbitAngle) * this.orbitRadius;
+                }
+                if (this.pulseAmount > 0) {
+                    this.pulsePhase += this.pulseSpeed * dt;
+                    this.radius = this.baseRadius * (1 + Math.sin(this.pulsePhase) * this.pulseAmount);
+                }
+            }
+
+            draw(ctx, time) {
+                const color = this.isBlackHole ? C_BLACKHOLE : C_MAGENTA;
+                const glowSize = this.isBlackHole ? 25 : 15;
+
+                // Outer glow
+                ctx.save();
+                ctx.shadowColor = color;
+                ctx.shadowBlur = glowSize + (this.pulseAmount > 0 ? Math.sin(this.pulsePhase) * 8 : 0);
+
+                // Planet body
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Inner fill
+                const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+                if (this.isBlackHole) {
+                    grad.addColorStop(0, 'rgba(136,0,255,0.4)');
+                    grad.addColorStop(0.7, 'rgba(136,0,255,0.1)');
+                    grad.addColorStop(1, 'rgba(136,0,255,0)');
+                } else {
+                    grad.addColorStop(0, 'rgba(255,0,255,0.3)');
+                    grad.addColorStop(0.7, 'rgba(255,0,255,0.08)');
+                    grad.addColorStop(1, 'rgba(255,0,255,0)');
+                }
+                ctx.fillStyle = grad;
+                ctx.fill();
+
+                // Gravity well indicator
+                if (!this.isBlackHole) {
+                    const gravR = Math.sqrt(this.mass * G_CONST) * 0.8;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, gravR, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(255,0,255,${0.05 + (this.pulseAmount > 0 ? Math.sin(this.pulsePhase) * 0.03 : 0)})`;
+                    ctx.lineWidth = 0.5;
+                    ctx.setLineDash([4, 8]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // Black hole accretion ring
+                if (this.isBlackHole) {
+                    ctx.beginPath();
+                    ctx.ellipse(this.x, this.y, this.radius * 2.2, this.radius * 0.6, time * 0.5, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(136,0,255,0.3)';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.ellipse(this.x, this.y, this.radius * 1.8, this.radius * 0.4, -time * 0.3, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(200,100,255,0.2)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+        }
+
+        // --- Level Generation ---
+        function getDifficultyParams(lvl) {
+            const planetCount = clamp(2 + Math.floor(lvl * 0.6), 3, 8);
+            const goalRadius = clamp(GOAL_BASE_RADIUS - lvl * 0.8, 15, GOAL_BASE_RADIUS);
+            const hasMoving = lvl >= 6;
+            const hasPulsing = lvl >= 16;
+            const hasBlackHoles = lvl >= 30;
+            const blackHoleCount = hasBlackHoles ? Math.min(1 + Math.floor((lvl - 30) / 5), 3) : 0;
+            const movingChance = clamp((lvl - 5) * 0.1, 0, 0.8);
+            const pulseChance = clamp((lvl - 15) * 0.08, 0, 0.6);
+            return { planetCount, goalRadius, hasMoving, hasPulsing, hasBlackHoles, blackHoleCount, movingChance, pulseChance };
+        }
+
+        function generateLevel(lvl) {
+            const diff = getDifficultyParams(lvl);
+            const margin = 80;
+
+            // Start and goal at opposite ends
+            const startSide = Math.random() < 0.5 ? 'left' : 'right';
+            const start = {
+                x: startSide === 'left' ? rand(margin, W * 0.2) : rand(W * 0.8, W - margin),
+                y: rand(H * 0.25, H * 0.75)
+            };
+            const goal = {
+                x: startSide === 'left' ? rand(W * 0.8, W - margin) : rand(margin, W * 0.2),
+                y: rand(H * 0.25, H * 0.75),
+                radius: diff.goalRadius
+            };
+
+            const planets = [];
+            const totalPlanets = diff.planetCount + diff.blackHoleCount;
+
+            for (let i = 0; i < totalPlanets; i++) {
+                let px, py, pr, valid;
+                let tries = 0;
+                const isBH = i >= diff.planetCount;
+
+                do {
+                    valid = true;
+                    px = rand(margin + 40, W - margin - 40);
+                    py = rand(margin + 40, H - margin - 40);
+                    pr = rand(PLANET_MIN_R, PLANET_MAX_R);
+
+                    // Don't overlap start/goal
+                    if (dist({ x: px, y: py }, start) < pr + 60) valid = false;
+                    if (dist({ x: px, y: py }, goal) < pr + goal.radius + 40) valid = false;
+
+                    // Don't overlap other planets
+                    for (const p of planets) {
+                        if (dist({ x: px, y: py }, p) < pr + p.baseRadius + 30) valid = false;
+                    }
+                    tries++;
+                } while (!valid && tries < 100);
+
+                if (tries >= 100) continue;
+
+                const mass = isBH ? rand(200, 400) : rand(40, 120 + lvl * 3);
+                const planet = new Planet(px, py, pr, mass, isBH);
+
+                // Moving planets
+                if (diff.hasMoving && !isBH && Math.random() < diff.movingChance) {
+                    planet.orbitCenter = { x: px, y: py };
+                    planet.orbitRadius = rand(30, 80);
+                    planet.orbitSpeed = rand(0.3, 0.8 + lvl * 0.02);
+                    planet.orbitAngle = rand(0, Math.PI * 2);
+                    planet.x = planet.orbitCenter.x + Math.cos(planet.orbitAngle) * planet.orbitRadius;
+                    planet.y = planet.orbitCenter.y + Math.sin(planet.orbitAngle) * planet.orbitRadius;
+                }
+
+                // Pulsing planets
+                if (diff.hasPulsing && !isBH && Math.random() < diff.pulseChance) {
+                    planet.pulseSpeed = rand(1.5, 3);
+                    planet.pulseAmount = rand(0.15, 0.35);
+                }
+
+                planets.push(planet);
+            }
+
+            return { start, goal, planets, level: lvl };
+        }
+
+        // --- Solver Simulation ---
+        function simulateTrajectory(level, vx, vy, storeTrail = false) {
+            let px = level.start.x, py = level.start.y;
+            let pvx = vx, pvy = vy;
+            const trail = storeTrail ? [{ x: px, y: py }] : null;
+
+            // Clone planet states for simulation
+            const simPlanets = level.planets.map(p => ({
+                x: p.x, y: p.y, baseRadius: p.baseRadius, radius: p.radius,
+                mass: p.mass, isBlackHole: p.isBlackHole,
+                orbitCenter: p.orbitCenter ? { ...p.orbitCenter } : null,
+                orbitRadius: p.orbitRadius, orbitSpeed: p.orbitSpeed,
+                orbitAngle: p.orbitAngle, pulsePhase: p.pulsePhase,
+                pulseSpeed: p.pulseSpeed, pulseAmount: p.pulseAmount
+            }));
+
+            const dt = 1 / 60;
+
+            for (let step = 0; step < MAX_SIM_STEPS; step++) {
+                // Update planets
+                for (const p of simPlanets) {
+                    if (p.orbitCenter) {
+                        p.orbitAngle += p.orbitSpeed * dt;
+                        p.x = p.orbitCenter.x + Math.cos(p.orbitAngle) * p.orbitRadius;
+                        p.y = p.orbitCenter.y + Math.sin(p.orbitAngle) * p.orbitRadius;
+                    }
+                    if (p.pulseAmount > 0) {
+                        p.pulsePhase += p.pulseSpeed * dt;
+                        p.radius = p.baseRadius * (1 + Math.sin(p.pulsePhase) * p.pulseAmount);
+                    }
+                }
+
+                // Gravity
+                let ax = 0, ay = 0;
+                for (const p of simPlanets) {
+                    const dx = p.x - px;
+                    const dy = p.y - py;
+                    const r2 = dx * dx + dy * dy;
+                    const r = Math.sqrt(r2);
+                    if (r < p.radius + PROBE_RADIUS) {
+                        return { success: false, reason: p.isBlackHole ? 'consumed' : 'collision', steps: step };
+                    }
+                    const softR2 = Math.max(r2, (p.radius + 10) * (p.radius + 10));
+                    const force = G_CONST * p.mass * PROBE_MASS / softR2;
+                    ax += force * dx / r / PROBE_MASS;
+                    ay += force * dy / r / PROBE_MASS;
+                }
+
+                pvx += ax * dt;
+                pvy += ay * dt;
+                px += pvx * dt;
+                py += pvy * dt;
+
+                if (trail && step % 2 === 0) trail.push({ x: px, y: py });
+
+                // Out of bounds
+                if (px < -50 || px > W + 50 || py < -50 || py > H + 50) {
+                    return { success: false, reason: 'escaped', steps: step };
+                }
+
+                // Goal check
+                if (dist({ x: px, y: py }, level.goal) < level.goal.radius) {
+                    return { success: true, steps: step, trail };
+                }
+            }
+
+            return { success: false, reason: 'timeout', steps: MAX_SIM_STEPS };
+        }
+
+        function solveLevel(level) {
+            const maxSpeed = 12;
+            let bestResult = null;
+
+            // Compute direct angle to goal
+            const goalAngle = Math.atan2(level.goal.y - level.start.y, level.goal.x - level.start.x);
+
+            for (let i = 0; i < SOLVER_ATTEMPTS; i++) {
+                let angle, speed;
+
+                if (i < SOLVER_ATTEMPTS * 0.4) {
+                    // 40% of attempts: bias toward goal direction with spread
+                    const spread = Math.PI * 0.6;
+                    angle = goalAngle + rand(-spread, spread);
+                    speed = rand(3, maxSpeed);
+                } else if (i < SOLVER_ATTEMPTS * 0.7) {
+                    // 30%: random direction
+                    angle = rand(0, Math.PI * 2);
+                    speed = rand(2, maxSpeed);
+                } else {
+                    // 30%: try bouncing off planets (aim at planets)
+                    if (level.planets.length > 0) {
+                        const targetPlanet = level.planets[Math.floor(Math.random() * level.planets.length)];
+                        angle = Math.atan2(targetPlanet.y - level.start.y, targetPlanet.x - level.start.x) + rand(-0.5, 0.5);
+                        speed = rand(4, maxSpeed);
+                    } else {
+                        angle = rand(0, Math.PI * 2);
+                        speed = rand(2, maxSpeed);
+                    }
+                }
+
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed;
+
+                const result = simulateTrajectory(level, vx, vy, false);
+
+                if (result.success) {
+                    // Re-simulate with trail storage for the winning vector
+                    const trailResult = simulateTrajectory(level, vx, vy, true);
+                    return { solved: true, ghostVx: vx, ghostVy: vy, ghostTrail: trailResult.trail || [] };
+                }
+
+                // Keep track of closest approach
+                if (!bestResult || result.steps > bestResult.steps) {
+                    bestResult = result;
+                }
+            }
+
+            return { solved: false };
+        }
+
+        // --- Async Level Generation with Progress ---
+        async function generateVerifiedLevel(lvl) {
+            state = 'GENERATING';
+            showScreen('generating-screen');
+            genAttempts = 0;
+
+            const maxAttempts = 50;
+
+            return new Promise((resolve) => {
+                function attempt() {
+                    genAttempts++;
+                    const progress = Math.min(genAttempts / maxAttempts * 100, 95);
+                    document.getElementById('gen-bar').style.width = progress + '%';
+                    document.getElementById('gen-detail').textContent = `SECTOR ${lvl} // ATTEMPT ${genAttempts}`;
+
+                    if (genAttempts > maxAttempts) {
+                        // Fallback: generate an easier level
+                        document.getElementById('gen-status').textContent = 'RECALIBRATING...';
+                        const fallbackLevel = generateLevel(Math.max(1, lvl - 2));
+                        const fallbackResult = solveLevel(fallbackLevel);
+                        if (fallbackResult.solved) {
+                            resolve({ level: fallbackLevel, ghostVector: { vx: fallbackResult.ghostVx, vy: fallbackResult.ghostVy }, ghostTrail: fallbackResult.ghostTrail || [] });
+                        } else {
+                            // Ultimate fallback: simple level
+                            resolve(createSimpleLevel(lvl));
+                        }
+                        return;
+                    }
+
+                    const levelData = generateLevel(lvl);
+                    const result = solveLevel(levelData);
+
+                    if (result.solved) {
+                        document.getElementById('gen-bar').style.width = '100%';
+                        document.getElementById('gen-status').textContent = 'SECTOR VERIFIED';
+                        setTimeout(() => {
+                            resolve({ level: levelData, ghostVector: { vx: result.ghostVx, vy: result.ghostVy }, ghostTrail: result.ghostTrail || [] });
+                        }, 300);
+                    } else {
+                        requestAnimationFrame(attempt);
+                    }
+                }
+                requestAnimationFrame(attempt);
+            });
+        }
+
+        function createSimpleLevel(lvl) {
+            const start = { x: W * 0.15, y: H * 0.5 };
+            const goal = { x: W * 0.85, y: H * 0.5, radius: 40 };
+            const planet = new Planet(W * 0.5, H * 0.5, 20, 80);
+            return {
+                level: { start, goal, planets: [planet], level: lvl },
+                ghostVector: { vx: 5, vy: -2 },
+                ghostTrail: []
+            };
+        }
+
+        // --- Probe ---
+        function createProbe(x, y) {
+            return { x, y, vx: 0, vy: 0, alive: true };
+        }
+
+        // --- Particles ---
+        function spawnParticles(x, y, color, count, speed) {
+            for (let i = 0; i < count; i++) {
+                const angle = rand(0, Math.PI * 2);
+                const spd = rand(speed * 0.3, speed);
+                particles.push({
+                    x, y,
+                    vx: Math.cos(angle) * spd,
+                    vy: Math.sin(angle) * spd,
+                    life: 1,
+                    decay: rand(0.01, 0.03),
+                    color,
+                    size: rand(1, 3)
+                });
+            }
+        }
+
+        function updateParticles(dt) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx * dt * 60;
+                p.y += p.vy * dt * 60;
+                p.life -= p.decay;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function drawParticles(ctx) {
+            for (const p of particles) {
+                ctx.save();
+                ctx.globalAlpha = p.life;
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = 8;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // --- UI Management ---
+        function showScreen(id) {
+            ['menu-screen', 'generating-screen', 'complete-screen', 'failed-screen'].forEach(s => {
+                document.getElementById(s).classList.toggle('hidden', s !== id);
+            });
+            document.getElementById('hud').classList.toggle('hidden', id !== null && id !== 'hud');
+        }
+
+        function updateHUD() {
+            document.getElementById('hud-level').textContent = level;
+            document.getElementById('hud-attempts').textContent = attempts;
+            document.getElementById('hud-best').textContent = bestLevel;
+            document.getElementById('hud-hint').classList.toggle('hidden', attempts < 10 || !ghostVector);
+        }
+
+        // --- Input ---
+        canvas.addEventListener('mousedown', onPointerDown);
+        canvas.addEventListener('mousemove', onPointerMove);
+        canvas.addEventListener('mouseup', onPointerUp);
+        canvas.addEventListener('touchstart', e => { e.preventDefault(); onPointerDown(e.touches[0]); }, { passive: false });
+        canvas.addEventListener('touchmove', e => { e.preventDefault(); onPointerMove(e.touches[0]); }, { passive: false });
+        canvas.addEventListener('touchend', e => { e.preventDefault(); onPointerUp(); }, { passive: false });
+
+        function getPos(e) {
+            return { x: e.clientX || e.pageX, y: e.clientY || e.pageY };
+        }
+
+        function onPointerDown(e) {
+            if (state !== 'AIMING') return;
+            const pos = getPos(e);
+            if (dist(pos, currentLevel.start) < 80) {
+                isDragging = true;
+                dragStart = { ...currentLevel.start };
+                dragCurrent = { ...pos };
+            }
+        }
+
+        function onPointerMove(e) {
+            if (!isDragging) return;
+            dragCurrent = getPos(e);
+        }
+
+        function onPointerUp() {
+            if (!isDragging || state !== 'AIMING') return;
+            isDragging = false;
+
+            const dx = dragStart.x - dragCurrent.x;
+            const dy = dragStart.y - dragCurrent.y;
+            const mag = Math.hypot(dx, dy);
+
+            if (mag < 10) return;
+
+            const maxDrag = 200;
+            const speed = clamp(mag / maxDrag, 0, 1) * 12;
+            const angle = Math.atan2(dy, dx);
+
+            probe = createProbe(currentLevel.start.x, currentLevel.start.y);
+            probe.vx = Math.cos(angle) * speed;
+            probe.vy = Math.sin(angle) * speed;
+            trail = [{ x: probe.x, y: probe.y }];
+            state = 'FLYING';
+            attempts++;
+            updateHUD();
+        }
+
+        // Keyboard
+        document.addEventListener('keydown', e => {
+            if (e.key === 'h' || e.key === 'H') {
+                if (attempts >= 10 && ghostVector && state === 'AIMING') {
+                    showHint = !showHint;
+                }
+            }
+        });
+
+        // --- Buttons ---
+        document.getElementById('btn-start').addEventListener('click', async () => {
+            level = 1;
+            attempts = 0;
+            await startLevel();
+        });
+
+        document.getElementById('btn-next').addEventListener('click', async () => {
+            level++;
+            attempts = 0;
+            await startLevel();
+        });
+
+        document.getElementById('btn-retry').addEventListener('click', () => {
+            showHint = false;
+            resetToAiming();
+        });
+
+        document.getElementById('btn-menu').addEventListener('click', () => {
+            state = 'MENU';
+            showScreen('menu-screen');
+            updateMenuBest();
+        });
+
+        function clonePlanet(p) {
+            return {
+                x: p.x, y: p.y, baseRadius: p.baseRadius, radius: p.radius,
+                mass: p.mass, isBlackHole: p.isBlackHole,
+                orbitCenter: p.orbitCenter ? { x: p.orbitCenter.x, y: p.orbitCenter.y } : null,
+                orbitRadius: p.orbitRadius, orbitSpeed: p.orbitSpeed,
+                orbitAngle: p.orbitAngle, pulsePhase: p.pulsePhase,
+                pulseSpeed: p.pulseSpeed, pulseAmount: p.pulseAmount
+            };
+        }
+
+        function restorePlanets() {
+            if (!currentLevel || !initialPlanets.length) return;
+            for (let i = 0; i < currentLevel.planets.length && i < initialPlanets.length; i++) {
+                const src = initialPlanets[i];
+                const dst = currentLevel.planets[i];
+                dst.x = src.x; dst.y = src.y;
+                dst.baseRadius = src.baseRadius; dst.radius = src.radius;
+                dst.mass = src.mass; dst.isBlackHole = src.isBlackHole;
+                dst.orbitCenter = src.orbitCenter ? { x: src.orbitCenter.x, y: src.orbitCenter.y } : null;
+                dst.orbitRadius = src.orbitRadius; dst.orbitSpeed = src.orbitSpeed;
+                dst.orbitAngle = src.orbitAngle; dst.pulsePhase = src.pulsePhase;
+                dst.pulseSpeed = src.pulseSpeed; dst.pulseAmount = src.pulseAmount;
+            }
+        }
+
+        async function startLevel() {
+            const result = await generateVerifiedLevel(level);
+            currentLevel = result.level;
+            ghostVector = result.ghostVector;
+            ghostTrail = result.ghostTrail || [];
+            initialPlanets = currentLevel.planets.map(p => clonePlanet(p));
+            showHint = false;
+            resetToAiming();
+            if (level > bestLevel) {
+                bestLevel = level;
+                localStorage.setItem('neonOrbiterBest', bestLevel);
+            }
+        }
+
+        function resetToAiming() {
+            probe = null;
+            trail = [];
+            particles = [];
+            restorePlanets();
+            levelTime = 0;
+            state = 'AIMING';
+            showScreen('hud');
+            updateHUD();
+        }
+
+        function updateMenuBest() {
+            document.getElementById('menu-best').textContent = bestLevel > 1 ? `HIGHEST SECTOR REACHED: ${bestLevel}` : '';
+        }
+
+        // --- Physics Update ---
+        function updatePhysics(dt) {
+            if (state !== 'FLYING' || !probe || !probe.alive) return;
+
+            // Update planets
+            for (const p of currentLevel.planets) {
+                p.update(dt);
+            }
+
+            // Gravitational forces
+            let ax = 0, ay = 0;
+            for (const p of currentLevel.planets) {
+                const dx = p.x - probe.x;
+                const dy = p.y - probe.y;
+                const r = Math.sqrt(dx * dx + dy * dy);
+
+                // Collision check
+                if (r < p.radius + PROBE_RADIUS) {
+                    probe.alive = false;
+                    shakeAmount = 15;
+                    spawnParticles(probe.x, probe.y, p.isBlackHole ? C_BLACKHOLE : C_RED, 40, 4);
+                    setTimeout(() => {
+                        if (state === 'FLYING') showFailed(p.isBlackHole ? 'CONSUMED BY SINGULARITY' : 'PROBE IMPACT');
+                    }, 500);
+                    return;
+                }
+
+                const softR = Math.max(r, p.radius + 5);
+                const force = G_CONST * p.mass * PROBE_MASS / (softR * softR);
+                ax += force * dx / r / PROBE_MASS;
+                ay += force * dy / r / PROBE_MASS;
+            }
+
+            probe.vx += ax * dt;
+            probe.vy += ay * dt;
+            probe.x += probe.vx * dt;
+            probe.y += probe.vy * dt;
+
+            // Trail
+            trail.push({ x: probe.x, y: probe.y });
+            if (trail.length > MAX_TRAIL) trail.shift();
+
+            // Out of bounds
+            if (probe.x < -50 || probe.x > W + 50 || probe.y < -50 || probe.y > H + 50) {
+                probe.alive = false;
+                shakeAmount = 10;
+                spawnParticles(clamp(probe.x, 0, W), clamp(probe.y, 0, H), C_RED, 25, 3);
+                setTimeout(() => {
+                    if (state === 'FLYING') showFailed('SIGNAL LOST - PROBE ESCAPED');
+                }, 500);
+                return;
+            }
+
+            // Goal check
+            if (dist(probe, currentLevel.goal) < currentLevel.goal.radius) {
+                probe.alive = false;
+                state = 'COMPLETE';
+                warpProgress = 0;
+                spawnParticles(currentLevel.goal.x, currentLevel.goal.y, C_EMERALD, 60, 6);
+                if (level > bestLevel) {
+                    bestLevel = level;
+                    localStorage.setItem('neonOrbiterBest', bestLevel);
+                }
+                setTimeout(() => {
+                    showScreen('complete-screen');
+                    document.getElementById('complete-detail').textContent = `SECTOR ${level} CLEARED // ATTEMPTS: ${attempts}`;
+                }, 1500);
+            }
+        }
+
+        function showFailed(reason) {
+            state = 'FAILED';
+            showScreen('failed-screen');
+            document.getElementById('fail-reason').textContent = reason;
+            document.getElementById('fail-detail').textContent = `SECTOR ${level} // ATTEMPT ${attempts}`;
+        }
+
+        // --- Trajectory Prediction ---
+        function computePrediction() {
+            if (!isDragging || !dragStart || !dragCurrent) return [];
+
+            const dx = dragStart.x - dragCurrent.x;
+            const dy = dragStart.y - dragCurrent.y;
+            const mag = Math.hypot(dx, dy);
+            const maxDrag = 200;
+            const speed = clamp(mag / maxDrag, 0, 1) * 12;
+            const angle = Math.atan2(dy, dx);
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+
+            let px = currentLevel.start.x, py = currentLevel.start.y;
+            let pvx = vx, pvy = vy;
+            const points = [{ x: px, y: py }];
+            const dt = 1 / 60;
+            const predSteps = Math.floor(MAX_SIM_STEPS * 0.2);
+
+            for (let step = 0; step < predSteps; step++) {
+                let ax = 0, ay = 0;
+                for (const p of currentLevel.planets) {
+                    const pdx = p.x - px;
+                    const pdy = p.y - py;
+                    const r = Math.sqrt(pdx * pdx + pdy * pdy);
+                    if (r < p.radius + PROBE_RADIUS) break;
+                    const softR = Math.max(r, p.radius + 10);
+                    const force = G_CONST * p.mass * PROBE_MASS / (softR * softR);
+                    ax += force * pdx / r / PROBE_MASS;
+                    ay += force * pdy / r / PROBE_MASS;
+                }
+                pvx += ax * dt;
+                pvy += ay * dt;
+                px += pvx * dt;
+                py += pvy * dt;
+
+                if (px < -50 || px > W + 50 || py < -50 || py > H + 50) break;
+                if (dist({ x: px, y: py }, currentLevel.goal) < currentLevel.goal.radius) {
+                    points.push({ x: px, y: py });
+                    break;
+                }
+
+                if (step % 3 === 0) points.push({ x: px, y: py });
+            }
+
+            return points;
+        }
+
+        // --- Drawing ---
+        function drawBackground() {
+            // Deep space gradient
+            const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.7);
+            grad.addColorStop(0, '#0a0a20');
+            grad.addColorStop(1, '#030308');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, H);
+
+            // Grain overlay
+            ctx.save();
+            ctx.globalAlpha = 0.4;
+            ctx.drawImage(grainCanvas, 0, 0);
+            ctx.restore();
+
+            // Subtle grid
+            ctx.save();
+            ctx.strokeStyle = 'rgba(0,242,255,0.02)';
+            ctx.lineWidth = 0.5;
+            const gridSize = 60;
+            for (let x = 0; x < W; x += gridSize) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+            }
+            for (let y = 0; y < H; y += gridSize) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+            }
+            ctx.restore();
+
+            // Stars
+            ctx.save();
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            for (let i = 0; i < 80; i++) {
+                const sx = (Math.sin(i * 127.1 + i) * 0.5 + 0.5) * W;
+                const sy = (Math.cos(i * 311.7 + i) * 0.5 + 0.5) * H;
+                const ss = (Math.sin(performance.now() * 0.001 + i) * 0.5 + 0.5) * 1.5;
+                ctx.beginPath();
+                ctx.arc(sx, sy, ss, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        function drawStart() {
+            if (!currentLevel) return;
+            const s = currentLevel.start;
+            const time = performance.now() * 0.001;
+
+            ctx.save();
+            ctx.shadowColor = C_CYAN;
+            ctx.shadowBlur = 15;
+
+            // Launch point indicator
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, 8, 0, Math.PI * 2);
+            ctx.strokeStyle = C_CYAN;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Pulsing ring
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, 12 + Math.sin(time * 2) * 3, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(0,242,255,0.3)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Crosshair
+            ctx.beginPath();
+            ctx.moveTo(s.x - 15, s.y); ctx.lineTo(s.x + 15, s.y);
+            ctx.moveTo(s.x, s.y - 15); ctx.lineTo(s.x, s.y + 15);
+            ctx.strokeStyle = 'rgba(0,242,255,0.5)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.restore();
+
+            // Label
+            ctx.save();
+            ctx.font = '10px "Share Tech Mono", monospace';
+            ctx.fillStyle = 'rgba(0,242,255,0.6)';
+            ctx.textAlign = 'center';
+            ctx.fillText('LAUNCH POINT', s.x, s.y - 20);
+            ctx.restore();
+        }
+
+        function drawGoal() {
+            if (!currentLevel) return;
+            const g = currentLevel.goal;
+            const time = performance.now() * 0.001;
+
+            ctx.save();
+            ctx.shadowColor = C_EMERALD;
+            ctx.shadowBlur = 20;
+
+            // Outer ring
+            ctx.beginPath();
+            ctx.arc(g.x, g.y, g.radius, 0, Math.PI * 2);
+            ctx.strokeStyle = C_EMERALD;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Inner ring
+            ctx.beginPath();
+            ctx.arc(g.x, g.y, g.radius * 0.6, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(0,255,136,0.5)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Rotating arcs
+            for (let i = 0; i < 4; i++) {
+                const a = time * 1.5 + i * Math.PI / 2;
+                ctx.beginPath();
+                ctx.arc(g.x, g.y, g.radius + 5, a, a + 0.8);
+                ctx.strokeStyle = 'rgba(0,255,136,0.4)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Center dot
+            ctx.beginPath();
+            ctx.arc(g.x, g.y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = C_EMERALD;
+            ctx.fill();
+
+            ctx.restore();
+
+            // Label
+            ctx.save();
+            ctx.font = '10px "Share Tech Mono", monospace';
+            ctx.fillStyle = 'rgba(0,255,136,0.6)';
+            ctx.textAlign = 'center';
+            ctx.fillText('SINGULARITY GATE', g.x, g.y - g.radius - 10);
+            ctx.restore();
+        }
+
+        function drawTrail() {
+            if (trail.length < 2) return;
+
+            ctx.save();
+            for (let i = 1; i < trail.length; i++) {
+                const alpha = i / trail.length;
+                ctx.beginPath();
+                ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+                ctx.lineTo(trail[i].x, trail[i].y);
+                ctx.strokeStyle = `rgba(0,242,255,${alpha * 0.7})`;
+                ctx.lineWidth = 1 + alpha * 2;
+                ctx.shadowColor = C_CYAN;
+                ctx.shadowBlur = 5 * alpha;
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function drawGhostTrail() {
+            if (!showHint || ghostTrail.length < 2) return;
+
+            ctx.save();
+            ctx.setLineDash([4, 8]);
+            for (let i = 1; i < ghostTrail.length; i++) {
+                const alpha = i / ghostTrail.length * 0.4;
+                ctx.beginPath();
+                ctx.moveTo(ghostTrail[i - 1].x, ghostTrail[i - 1].y);
+                ctx.lineTo(ghostTrail[i].x, ghostTrail[i].y);
+                ctx.strokeStyle = `rgba(255,221,0,${alpha})`;
+                ctx.lineWidth = 1;
+                ctx.shadowColor = C_YELLOW;
+                ctx.shadowBlur = 3;
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+            ctx.restore();
+
+            ctx.save();
+            ctx.font = '10px "Share Tech Mono", monospace';
+            ctx.fillStyle = 'rgba(255,221,0,0.5)';
+            ctx.textAlign = 'center';
+            ctx.fillText('GHOST VECTOR', ghostTrail[Math.floor(ghostTrail.length / 2)]?.x || 0,
+                (ghostTrail[Math.floor(ghostTrail.length / 2)]?.y || 0) - 10);
+            ctx.restore();
+        }
+
+        function drawPrediction() {
+            const points = computePrediction();
+            if (points.length < 2) return;
+
+            ctx.save();
+            for (let i = 1; i < points.length; i++) {
+                const alpha = (1 - i / points.length) * 0.5;
+                ctx.beginPath();
+                ctx.arc(points[i].x, points[i].y, 1.5, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(0,242,255,${alpha})`;
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        function drawDragLine() {
+            if (!isDragging || !dragStart || !dragCurrent) return;
+
+            const dx = dragStart.x - dragCurrent.x;
+            const dy = dragStart.y - dragCurrent.y;
+            const mag = Math.hypot(dx, dy);
+
+            ctx.save();
+
+            // Drag line
+            ctx.beginPath();
+            ctx.moveTo(dragStart.x, dragStart.y);
+            ctx.lineTo(dragCurrent.x, dragCurrent.y);
+            ctx.strokeStyle = 'rgba(0,242,255,0.6)';
+            ctx.lineWidth = 2;
+            ctx.shadowColor = C_CYAN;
+            ctx.shadowBlur = 10;
+            ctx.stroke();
+
+            // Launch direction arrow
+            if (mag > 10) {
+                const angle = Math.atan2(dy, dx);
+                const arrowLen = Math.min(mag * 0.5, 100);
+                const ax = dragStart.x + Math.cos(angle) * arrowLen;
+                const ay = dragStart.y + Math.sin(angle) * arrowLen;
+
+                ctx.beginPath();
+                ctx.moveTo(dragStart.x, dragStart.y);
+                ctx.lineTo(ax, ay);
+                ctx.strokeStyle = 'rgba(0,242,255,0.3)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Velocity indicator
+                const maxDrag = 200;
+                const speed = clamp(mag / maxDrag, 0, 1) * 12;
+                ctx.font = '11px "Share Tech Mono", monospace';
+                ctx.fillStyle = 'rgba(0,242,255,0.7)';
+                ctx.textAlign = 'center';
+                ctx.fillText(`v=${speed.toFixed(1)}`, dragCurrent.x, dragCurrent.y - 15);
+            }
+
+            ctx.restore();
+        }
+
+        function drawProbe() {
+            if (!probe) return;
+
+            ctx.save();
+            ctx.shadowColor = C_CYAN;
+            ctx.shadowBlur = 20;
+
+            // Probe body
+            ctx.beginPath();
+            ctx.arc(probe.x, probe.y, PROBE_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = C_CYAN;
+            ctx.fill();
+
+            // Outer glow
+            ctx.beginPath();
+            ctx.arc(probe.x, probe.y, PROBE_RADIUS + 3, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(0,242,255,0.5)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawWarpEffect() {
+            if (state !== 'COMPLETE' || !currentLevel) return;
+            warpProgress = Math.min(warpProgress + 0.02, 1);
+
+            ctx.save();
+            const cx = currentLevel.goal.x;
+            const cy = currentLevel.goal.y;
+
+            // Radial stretch lines
+            for (let i = 0; i < 20; i++) {
+                const angle = (i / 20) * Math.PI * 2;
+                const innerR = 20 * (1 - warpProgress);
+                const outerR = Math.max(W, H) * warpProgress;
+
+                ctx.beginPath();
+                ctx.moveTo(cx + Math.cos(angle) * innerR, cy + Math.sin(angle) * innerR);
+                ctx.lineTo(cx + Math.cos(angle) * outerR, cy + Math.sin(angle) * outerR);
+                ctx.strokeStyle = `rgba(0,255,136,${(1 - warpProgress) * 0.5})`;
+                ctx.lineWidth = 2;
+                ctx.shadowColor = C_EMERALD;
+                ctx.shadowBlur = 15;
+                ctx.stroke();
+            }
+
+            // Central flash
+            const flashR = 50 * warpProgress;
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, flashR);
+            grad.addColorStop(0, `rgba(255,255,255,${(1 - warpProgress) * 0.8})`);
+            grad.addColorStop(1, 'rgba(0,255,136,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, flashR, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // --- Main Loop ---
+        function gameLoop(timestamp) {
+            const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+            lastTime = timestamp;
+            levelTime += dt;
+
+            // Screen shake
+            ctx.save();
+            if (shakeAmount > 0) {
+                ctx.translate(
+                    (Math.random() - 0.5) * shakeAmount,
+                    (Math.random() - 0.5) * shakeAmount
+                );
+                shakeAmount *= 0.9;
+                if (shakeAmount < 0.5) shakeAmount = 0;
+            }
+
+            drawBackground();
+
+            if (currentLevel && state !== 'MENU' && state !== 'GENERATING') {
+                // Draw planets
+                for (const p of currentLevel.planets) {
+                    p.draw(ctx, levelTime);
+                }
+
+                drawStart();
+                drawGoal();
+                drawGhostTrail();
+
+                if (state === 'AIMING') {
+                    // Draw probe at launch point
+                    ctx.save();
+                    ctx.shadowColor = C_CYAN;
+                    ctx.shadowBlur = 15;
+                    ctx.beginPath();
+                    ctx.arc(currentLevel.start.x, currentLevel.start.y, PROBE_RADIUS, 0, Math.PI * 2);
+                    ctx.fillStyle = C_CYAN;
+                    ctx.fill();
+                    ctx.restore();
+                    drawDragLine();
+                    drawPrediction();
+                }
+
+                if (state === 'FLYING' || state === 'COMPLETE') {
+                    drawTrail();
+                    drawProbe();
+                }
+
+                drawParticles(ctx);
+
+                if (state === 'COMPLETE') {
+                    drawWarpEffect();
+                }
+            }
+
+            ctx.restore();
+
+            // Update
+            updatePhysics(dt);
+            updateParticles(dt);
+
+            // Regenerate grain occasionally
+            if (Math.random() < 0.02) generateGrain();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Init ---
+        updateMenuBest();
+        requestAnimationFrame(gameLoop);
+
+    </script>
+</body>
+
+</html>

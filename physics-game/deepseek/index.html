@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEON-ORBITER: Event Horizon</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        @keyframes glitch {
+
+            0%,
+            100% {
+                transform: translate(0);
+                opacity: 1;
+            }
+
+            20% {
+                transform: translate(-6px, 3px);
+                opacity: 0.9;
+            }
+
+            40% {
+                transform: translate(6px, -2px);
+                opacity: 0.8;
+            }
+
+            60% {
+                transform: translate(-3px, -4px);
+                opacity: 0.95;
+            }
+
+            80% {
+                transform: translate(4px, 2px);
+                opacity: 0.85;
+            }
+        }
+
+        @keyframes warpStretch {
+            0% {
+                transform: scaleX(1);
+                filter: brightness(1);
+            }
+
+            40% {
+                transform: scaleX(2.5) scaleY(0.3);
+                filter: brightness(3) hue-rotate(30deg);
+            }
+
+            100% {
+                transform: scaleX(0.01) scaleY(5);
+                filter: brightness(5) hue-rotate(60deg);
+                opacity: 0;
+            }
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translate(0);
+            }
+
+            10% {
+                transform: translate(-8px, 4px);
+            }
+
+            30% {
+                transform: translate(7px, -3px);
+            }
+
+            50% {
+                transform: translate(-5px, -6px);
+            }
+
+            70% {
+                transform: translate(6px, 2px);
+            }
+
+            90% {
+                transform: translate(-3px, 5px);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 0.6;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        @keyframes flickerIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+
+            70% {
+                opacity: 0.1;
+            }
+
+            85% {
+                opacity: 0.8;
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #020810;
+            overflow: hidden;
+            font-family: 'Share Tech Mono', monospace;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            cursor: crosshair;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #hud {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            right: 16px;
+            display: flex;
+            justify-content: space-between;
+            color: #00f2ff;
+            font-size: 14px;
+            pointer-events: none;
+            text-shadow: 0 0 8px #00f2ff, 0 0 20px #00f2ff40;
+            z-index: 11;
+        }
+
+        #hud .hud-item {
+            background: #02081080;
+            padding: 6px 14px;
+            border: 1px solid #00f2ff40;
+            border-radius: 4px;
+        }
+
+        #msg-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff00ff;
+            font-size: 28px;
+            text-align: center;
+            text-shadow: 0 0 12px #ff00ff, 0 0 30px #ff00ff60;
+            pointer-events: none;
+            z-index: 20;
+            display: none;
+        }
+
+        #msg-overlay.show {
+            display: block;
+            animation: flickerIn 0.6s ease-out;
+        }
+
+        #msg-overlay.shake {
+            animation: shake 0.5s ease-out;
+        }
+
+        #msg-overlay.warp {
+            animation: warpStretch 1.2s ease-in forwards;
+        }
+
+        #hint-btn {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            background: #02081090;
+            color: #00f2ff;
+            border: 1px solid #00f2ff50;
+            padding: 8px 20px;
+            font-family: inherit;
+            font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 12;
+            text-shadow: 0 0 6px #00f2ff;
+            pointer-events: auto;
+            transition: all 0.2s;
+        }
+
+        #hint-btn:hover {
+            background: #00f2ff20;
+            border-color: #00f2ff;
+        }
+
+        #hint-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        #level-transition {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #020810;
+            z-index: 30;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: #00f2ff;
+            font-size: 32px;
+            text-shadow: 0 0 15px #00f2ff, 0 0 40px #00f2ff60;
+        }
+
+        #level-transition.active {
+            display: flex;
+            animation: glitch 0.4s ease-out 3;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="game"></canvas>
+    <div id="hud">
+        <span class="hud-item">LVL <span id="lvl-display">1</span></span>
+        <span class="hud-item">FAILS <span id="fail-display">0</span></span>
+        <span class="hud-item">BEST <span id="best-display">1</span></span>
+    </div>
+    <div id="msg-overlay"></div>
+    <button id="hint-btn" disabled>HINT</button>
+    <div id="level-transition"><span id="transition-text"></span></div>
+
+    <script>
+        // ============================================================
+        // NEON-ORBITER: EVENT HORIZON
+        // ============================================================
+
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+
+        // --- DOM Elements ---
+        const lvlDisplay = document.getElementById('lvl-display');
+        const failDisplay = document.getElementById('fail-display');
+        const bestDisplay = document.getElementById('best-display');
+        const msgOverlay = document.getElementById('msg-overlay');
+        const hintBtn = document.getElementById('hint-btn');
+        const levelTransition = document.getElementById('level-transition');
+        const transitionText = document.getElementById('transition-text');
+
+        // ============================================================
+        // CONFIGURATION
+        // ============================================================
+        const CONFIG = {
+            G: 1800,                    // Gravitational constant (tuned)
+            MAX_LAUNCH_SPEED: 14,
+            MIN_LAUNCH_SPEED: 2,
+            DRAG_SENSITIVITY: 0.12,
+            TRAIL_LENGTH: 80,
+            TRAIL_DECAY: 0.92,
+            PREDICTION_FRACTION: 0.2,
+            SOLVER_ATTEMPTS: 5000,
+            SOLVER_MAX_STEPS: 900,
+            GOAL_BASE_RADIUS: 30,
+            PLANET_MIN_RADIUS: 22,
+            PLANET_MAX_RADIUS: 48,
+            PLANET_MIN_MASS: 40,
+            PLANET_MAX_MASS: 120,
+            BLACK_HOLE_RADIUS: 32,
+            BLACK_HOLE_CONSUME_RADIUS: 18,
+            ORBIT_SPEED_RANGE: [0.3, 1.2],
+            PULSE_AMPLITUDE: 0.35,
+            PULSE_SPEED: 1.8,
+            HINT_FAIL_THRESHOLD: 10,
+            PROBE_RADIUS: 6,
+            BG_STAR_COUNT: 200,
+        };
+
+        // ============================================================
+        // VECTOR MATH
+        // ============================================================
+        class Vec2 {
+            constructor(x = 0, y = 0) { this.x = x; this.y = y; }
+            add(v) { return new Vec2(this.x + v.x, this.y + v.y); }
+            sub(v) { return new Vec2(this.x - v.x, this.y - v.y); }
+            mul(s) { return new Vec2(this.x * s, this.y * s); }
+            div(s) { return new Vec2(this.x / s, this.y / s); }
+            length() { return Math.sqrt(this.x * this.x + this.y * this.y); }
+            normalize() { const l = this.length(); return l > 0.0001 ? this.div(l) : new Vec2(0, 0); }
+            distance(v) { return this.sub(v).length(); }
+            dot(v) { return this.x * v.x + this.y * v.y; }
+            angle() { return Math.atan2(this.y, this.x); }
+            static fromAngle(a, len = 1) { return new Vec2(Math.cos(a) * len, Math.sin(a) * len); }
+            clone() { return new Vec2(this.x, this.y); }
+        }
+
+        // ============================================================
+        // PARTICLE
+        // ============================================================
+        class Particle {
+            constructor(pos, color, life = 40) {
+                this.pos = pos.clone(); this.color = color; this.life = life; this.maxLife = life;
+                this.vel = new Vec2((Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 1.5);
+            }
+            update() { this.pos = this.pos.add(this.vel); this.life--; return this.life > 0; }
+            draw(ctx) {
+                const alpha = this.life / this.maxLife;
+                ctx.globalAlpha = alpha * 0.8;
+                ctx.fillStyle = this.color;
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 6;
+                ctx.beginPath();
+                ctx.arc(this.pos.x, this.pos.y, 1.5 + alpha * 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        // ============================================================
+        // CELESTIAL BODY
+        // ============================================================
+        class CelestialBody {
+            constructor(pos, mass, radius, type = 'planet', color = '#ff00ff') {
+                this.pos = pos.clone();
+                this.mass = mass;
+                this.baseMass = mass;
+                this.radius = radius;
+                this.type = type; // 'planet','goal','blackhole','start'
+                this.color = color;
+                // Orbital motion
+                this.orbitCenter = null;
+                this.orbitRadius = 0;
+                this.orbitAngle = Math.random() * Math.PI * 2;
+                this.orbitSpeed = 0;
+                this.orbits = false;
+                // Pulsing
+                this.pulses = false;
+                this.pulsePhase = Math.random() * Math.PI * 2;
+                this.pulseSpeed = CONFIG.PULSE_SPEED;
+                this.pulseAmp = CONFIG.PULSE_AMPLITUDE;
+                // Visual
+                this.glowPhase = Math.random() * Math.PI * 2;
+            }
+            setOrbit(center, radius, speed) {
+                this.orbitCenter = center.clone();
+                this.orbitRadius = radius;
+                this.orbitSpeed = speed * (Math.random() > 0.5 ? 1 : -1);
+                this.orbits = true;
+            }
+            setPulsing() {
+                this.pulses = true;
+            }
+            update(dt) {
+                this.glowPhase += dt * 2;
+                if (this.orbits && this.orbitCenter) {
+                    this.orbitAngle += this.orbitSpeed * dt;
+                    this.pos.x = this.orbitCenter.x + Math.cos(this.orbitAngle) * this.orbitRadius;
+                    this.pos.y = this.orbitCenter.y + Math.sin(this.orbitAngle) * this.orbitRadius;
+                }
+                if (this.pulses) {
+                    this.pulsePhase += this.pulseSpeed * dt;
+                    const factor = 1 + Math.sin(this.pulsePhase) * this.pulseAmp;
+                    this.mass = this.baseMass * factor;
+                }
+                if (this.type === 'blackhole') {
+                    this.glowPhase += dt * 1.5;
+                }
+            }
+            getPulseFactor() {
+                if (!this.pulses) return 1;
+                return 1 + Math.sin(this.pulsePhase) * this.pulseAmp;
+            }
+            draw(ctx, showGlow = true) {
+                const pulseFactor = this.getPulseFactor();
+                const visualRadius = this.radius * (this.pulses ? pulseFactor : 1);
+                if (showGlow) {
+                    // Outer glow
+                    for (let i = 3; i >= 1; i--) {
+                        const r = visualRadius + i * 10;
+                        const alpha = 0.08 / i;
+                        ctx.globalAlpha = alpha;
+                        ctx.fillStyle = this.color;
+                        ctx.shadowColor = this.color;
+                        ctx.shadowBlur = 12 + i * 8;
+                        ctx.beginPath();
+                        ctx.arc(this.pos.x, this.pos.y, r, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                // Main body
+                ctx.globalAlpha = 1;
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = showGlow ? 18 : 0;
+                // Draw ring for black holes
+                if (this.type === 'blackhole') {
+                    // Event horizon ring
+                    ctx.strokeStyle = this.color;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(this.pos.x, this.pos.y, visualRadius + 4, 0, Math.PI * 2);
+                    ctx.stroke();
+                    // Inner dark
+                    const grad = ctx.createRadialGradient(this.pos.x, this.pos.y, visualRadius * 0.2, this.pos.x, this.pos.y, visualRadius);
+                    grad.addColorStop(0, '#000000');
+                    grad.addColorStop(0.6, this.color + '60');
+                    grad.addColorStop(1, this.color + '00');
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(this.pos.x, this.pos.y, visualRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (this.type === 'goal') {
+                    // Diamond shape for goal
+                    ctx.fillStyle = 'transparent';
+                    ctx.strokeStyle = this.color;
+                    ctx.lineWidth = 2;
+                    ctx.shadowBlur = 22;
+                    ctx.beginPath();
+                    const r = visualRadius;
+                    ctx.moveTo(this.pos.x, this.pos.y - r);
+                    ctx.lineTo(this.pos.x + r, this.pos.y);
+                    ctx.lineTo(this.pos.x, this.pos.y + r);
+                    ctx.lineTo(this.pos.x - r, this.pos.y);
+                    ctx.closePath();
+                    ctx.stroke();
+                    // Inner glow
+                    const grad = ctx.createRadialGradient(this.pos.x, this.pos.y, 0, this.pos.x, this.pos.y, r);
+                    grad.addColorStop(0, this.color + '80');
+                    grad.addColorStop(1, this.color + '00');
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(this.pos.x, this.pos.y, r, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    // Planet
+                    const grad = ctx.createRadialGradient(this.pos.x - 2, this.pos.y - 2, visualRadius * 0.1, this.pos.x, this.pos.y, visualRadius);
+                    grad.addColorStop(0, this.color + '60');
+                    grad.addColorStop(0.5, this.color + '30');
+                    grad.addColorStop(1, this.color + '00');
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(this.pos.x, this.pos.y, visualRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Outline ring
+                    ctx.strokeStyle = this.color;
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                }
+                ctx.shadowBlur = 0;
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        // ============================================================
+        // PROBE
+        // ============================================================
+        class Probe {
+            constructor(pos) {
+                this.startPos = pos.clone();
+                this.pos = pos.clone();
+                this.vel = new Vec2(0, 0);
+                this.launched = false;
+                this.alive = true;
+                this.trail = [];
+                this.trailMax = CONFIG.TRAIL_LENGTH;
+                this.predictionPath = [];
+            }
+            reset() {
+                this.pos = this.startPos.clone();
+                this.vel = new Vec2(0, 0);
+                this.launched = false;
+                this.alive = true;
+                this.trail = [];
+                this.predictionPath = [];
+            }
+            launch(velocity) {
+                this.vel = velocity.clone();
+                this.launched = true;
+                this.alive = true;
+                this.trail = [this.pos.clone()];
+            }
+            update(dt, bodies) {
+                if (!this.launched || !this.alive) return;
+                // Apply gravity from all bodies
+                for (const body of bodies) {
+                    if (body.type === 'start') continue;
+                    const dir = body.pos.sub(this.pos);
+                    const dist = dir.length();
+                    if (dist < 0.5) {
+                        if (body.type === 'blackhole') { this.alive = false; return; }
+                        continue;
+                    }
+                    const forceMag = CONFIG.G * body.mass / (dist * dist);
+                    const force = dir.normalize().mul(forceMag * dt);
+                    this.vel = this.vel.add(force);
+                }
+                this.pos = this.pos.add(this.vel.mul(dt * 60));
+                // Trail
+                this.trail.push(this.pos.clone());
+                if (this.trail.length > this.trailMax) this.trail.shift();
+            }
+            setPredictionPath(path) { this.predictionPath = path; }
+            draw(ctx) {
+                // Draw prediction path
+                if (!this.launched && this.predictionPath.length > 1) {
+                    ctx.globalAlpha = 0.35;
+                    ctx.strokeStyle = '#00f2ff';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([4, 6]);
+                    ctx.shadowColor = '#00f2ff';
+                    ctx.shadowBlur = 8;
+                    ctx.beginPath();
+                    ctx.moveTo(this.predictionPath[0].x, this.predictionPath[0].y);
+                    for (let i = 1; i < this.predictionPath.length; i++) {
+                        ctx.lineTo(this.predictionPath[i].x, this.predictionPath[i].y);
+                    }
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.shadowBlur = 0;
+                    ctx.globalAlpha = 1;
+                }
+                // Draw trail
+                if (this.trail.length > 1) {
+                    for (let i = 1; i < this.trail.length; i++) {
+                        const alpha = i / this.trail.length;
+                        const t = this.trail[i];
+                        ctx.globalAlpha = alpha * 0.7;
+                        ctx.fillStyle = '#00f2ff';
+                        ctx.shadowColor = '#00f2ff';
+                        ctx.shadowBlur = 4;
+                        ctx.beginPath();
+                        ctx.arc(t.x, t.y, 1.5 + alpha * 2.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.shadowBlur = 0;
+                    ctx.globalAlpha = 1;
+                }
+                // Draw probe
+                if (this.alive) {
+                    ctx.shadowColor = '#00f2ff';
+                    ctx.shadowBlur = 16;
+                    ctx.fillStyle = '#00f2ff';
+                    ctx.beginPath();
+                    ctx.arc(this.pos.x, this.pos.y, CONFIG.PROBE_RADIUS, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Inner bright core
+                    ctx.shadowBlur = 8;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(this.pos.x, this.pos.y, CONFIG.PROBE_RADIUS * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            }
+        }
+
+        // ============================================================
+        // LEVEL
+        // ============================================================
+        class Level {
+            constructor(num) {
+                this.num = num;
+                this.startPos = new Vec2();
+                this.goalPos = new Vec2();
+                this.bodies = [];
+                this.goalRadius = CONFIG.GOAL_BASE_RADIUS;
+                this.ghostPath = null; // For hints
+            }
+        }
+
+        // ============================================================
+        // SOLVER / LEVEL GENERATOR
+        // ============================================================
+        function simulateShot(startPos, launchVel, bodies, goalPos, goalRadius, maxSteps) {
+            let pos = startPos.clone();
+            let vel = launchVel.clone();
+            const path = [pos.clone()];
+            for (let step = 0; step < maxSteps; step++) {
+                for (const body of bodies) {
+                    if (body.type === 'start') continue;
+                    const dir = body.pos.sub(pos);
+                    const dist = dir.length();
+                    if (dist < 0.5) {
+                        if (body.type === 'blackhole') return { hit: true, path };
+                        continue;
+                    }
+                    const forceMag = CONFIG.G * body.mass / (dist * dist);
+                    const force = dir.normalize().mul(forceMag * (1 / 60));
+                    vel = vel.add(force);
+                }
+                pos = pos.add(vel);
+                path.push(pos.clone());
+                // Check bounds
+                if (pos.x < -100 || pos.x > canvas.width + 100 || pos.y < -100 || pos.y > canvas.height + 100) {
+                    return { hit: true, path, outOfBounds: true };
+                }
+                // Check planet collision
+                for (const body of bodies) {
+                    if (body.type === 'start' || body.type === 'goal') continue;
+                    if (body.type === 'blackhole') {
+                        if (pos.distance(body.pos) < CONFIG.BLACK_HOLE_CONSUME_RADIUS) return { hit: true, path };
+                    } else {
+                        if (pos.distance(body.pos) < body.radius + CONFIG.PROBE_RADIUS) return { hit: true, path };
+                    }
+                }
+                // Check goal
+                if (pos.distance(goalPos) < goalRadius) {
+                    return { hit: false, path, reachedGoal: true };
+                }
+            }
+            return { hit: true, path };
+        }
+
+        function generateLevel(levelNum) {
+            const w = canvas.width;
+            const h = canvas.height;
+            const margin = 80;
+            const level = new Level(levelNum);
+
+            // Place start and goal at opposite ends
+            const side = Math.random();
+            if (side < 0.25) {
+                level.startPos = new Vec2(margin + Math.random() * 60, margin + Math.random() * (h - 2 * margin));
+                level.goalPos = new Vec2(w - margin - Math.random() * 60, margin + Math.random() * (h - 2 * margin));
+            } else if (side < 0.5) {
+                level.startPos = new Vec2(w - margin - Math.random() * 60, margin + Math.random() * (h - 2 * margin));
+                level.goalPos = new Vec2(margin + Math.random() * 60, margin + Math.random() * (h - 2 * margin));
+            } else if (side < 0.75) {
+                level.startPos = new Vec2(margin + Math.random() * (w - 2 * margin), margin + Math.random() * 60);
+                level.goalPos = new Vec2(margin + Math.random() * (w - 2 * margin), h - margin - Math.random() * 60);
+            } else {
+                level.startPos = new Vec2(margin + Math.random() * (w - 2 * margin), h - margin - Math.random() * 60);
+                level.goalPos = new Vec2(margin + Math.random() * (w - 2 * margin), margin + Math.random() * 60);
+            }
+
+            // Ensure min distance between start and goal
+            if (level.startPos.distance(level.goalPos) < w * 0.45) {
+                level.goalPos = level.startPos.add(level.startPos.sub(level.goalPos).normalize().mul(w * 0.55));
+                level.goalPos.x = Math.max(margin, Math.min(w - margin, level.goalPos.x));
+                level.goalPos.y = Math.max(margin, Math.min(h - margin, level.goalPos.y));
+            }
+
+            // Goal radius decreases with level
+            level.goalRadius = Math.max(16, CONFIG.GOAL_BASE_RADIUS - levelNum * 0.5);
+
+            // Planet count: 3-8, more at higher levels
+            const planetCount = Math.min(8, 3 + Math.floor(levelNum / 4));
+            const isOrbital = levelNum >= 6;
+            const isPulsing = levelNum >= 16;
+            const hasBlackHoles = levelNum >= 30;
+
+            // Determine orbital parameters
+            const centerX = w / 2;
+            const centerY = h / 2;
+            const maxOrbitRadius = Math.min(w, h) * 0.35;
+
+            // Add start marker body
+            const startBody = new CelestialBody(level.startPos, 0, 8, 'start', '#00f2ff');
+            level.bodies.push(startBody);
+
+            // Add goal body
+            const goalBody = new CelestialBody(level.goalPos, 0, level.goalRadius, 'goal', '#00ff88');
+            level.bodies.push(goalBody);
+
+            // Generate planets
+            const planets = [];
+            const attempts = 200;
+            for (let i = 0; i < planetCount; i++) {
+                let placed = false;
+                for (let a = 0; a < attempts; a++) {
+                    const px = margin + Math.random() * (w - 2 * margin);
+                    const py = margin + Math.random() * (h - 2 * margin);
+                    const candidate = new Vec2(px, py);
+                    // Check distance from start, goal, and other planets
+                    const minDistFromStart = level.startPos.distance(candidate);
+                    const minDistFromGoal = level.goalPos.distance(candidate);
+                    if (minDistFromStart < 80 || minDistFromGoal < 80) continue;
+                    let tooClose = false;
+                    for (const p of planets) {
+                        if (p.pos.distance(candidate) < p.radius + 50) { tooClose = true; break; }
+                    }
+                    if (tooClose) continue;
+
+                    const mass = CONFIG.PLANET_MIN_MASS + Math.random() * (CONFIG.PLANET_MAX_MASS - CONFIG.PLANET_MIN_MASS);
+                    const radius = CONFIG.PLANET_MIN_RADIUS + Math.random() * (CONFIG.PLANET_MAX_RADIUS - CONFIG.PLANET_MIN_RADIUS);
+                    const body = new CelestialBody(candidate, mass, radius, 'planet', '#ff00ff');
+
+                    // Set orbital motion if applicable
+                    if (isOrbital) {
+                        const oc = new Vec2(centerX + (Math.random() - 0.5) * w * 0.25, centerY + (Math.random() - 0.5) * h * 0.25);
+                        const or = 30 + Math.random() * (maxOrbitRadius - 30);
+                        const os = CONFIG.ORBIT_SPEED_RANGE[0] + Math.random() * (CONFIG.ORBIT_SPEED_RANGE[1] - CONFIG.ORBIT_SPEED_RANGE[0]);
+                        body.setOrbit(oc, or, os);
+                    }
+                    if (isPulsing) body.setPulsing();
+                    planets.push(body);
+                    placed = true;
+                    break;
+                }
+            }
+            level.bodies.push(...planets);
+
+            // Add black holes at level 30+
+            if (hasBlackHoles) {
+                const bhCount = 1 + Math.floor((levelNum - 30) / 5);
+                for (let i = 0; i < bhCount; i++) {
+                    for (let a = 0; a < 100; a++) {
+                        const bhx = margin + Math.random() * (w - 2 * margin);
+                        const bhy = margin + Math.random() * (h - 2 * margin);
+                        const bhPos = new Vec2(bhx, bhy);
+                        if (level.startPos.distance(bhPos) < 100 || level.goalPos.distance(bhPos) < 100) continue;
+                        let tooClose = false;
+                        for (const b of level.bodies) {
+                            if (b.type !== 'start' && b.type !== 'goal' && b.pos.distance(bhPos) < b.radius + 40) { tooClose = true; break; }
+                        }
+                        if (tooClose) continue;
+                        const bh = new CelestialBody(bhPos, 180 + Math.random() * 60, CONFIG.BLACK_HOLE_RADIUS, 'blackhole', '#ff0044');
+                        if (isOrbital) {
+                            const oc = new Vec2(centerX + (Math.random() - 0.5) * w * 0.2, centerY + (Math.random() - 0.5) * h * 0.2);
+                            bh.setOrbit(oc, 40 + Math.random() * maxOrbitRadius * 0.7, CONFIG.ORBIT_SPEED_RANGE[0] * 0.5 + Math.random() * 0.3);
+                        }
+                        level.bodies.push(bh);
+                        break;
+                    }
+                }
+            }
+
+            return level;
+        }
+
+        function solveLevel(level) {
+            // Run simulation with many random vectors
+            // We simulate planet motion during the solve
+            const simBodies = level.bodies.map(b => {
+                const nb = new CelestialBody(b.pos.clone(), b.baseMass || b.mass, b.radius, b.type, b.color);
+                if (b.orbits) nb.setOrbit(b.orbitCenter ? b.orbitCenter.clone() : new Vec2(), b.orbitRadius, b.orbitSpeed);
+                if (b.pulses) nb.setPulsing();
+                nb.pulsePhase = b.pulsePhase;
+                nb.orbitAngle = b.orbitAngle;
+                return nb;
+            });
+            const simGoal = level.goalPos.clone();
+            const simGoalRadius = level.goalRadius;
+            const simStart = level.startPos.clone();
+
+            for (let i = 0; i < CONFIG.SOLVER_ATTEMPTS; i++) {
+                // Reset bodies
+                simBodies.forEach((b, j) => {
+                    const orig = level.bodies[j];
+                    b.pos = orig.pos.clone();
+                    b.orbitAngle = orig.orbitAngle;
+                    b.pulsePhase = orig.pulsePhase;
+                    b.mass = b.baseMass;
+                });
+
+                const angle = Math.random() * Math.PI * 2;
+                const speed = CONFIG.MIN_LAUNCH_SPEED + Math.random() * (CONFIG.MAX_LAUNCH_SPEED - CONFIG.MIN_LAUNCH_SPEED);
+                const launchVel = Vec2.fromAngle(angle, speed);
+
+                let pos = simStart.clone();
+                let vel = launchVel.clone();
+                const path = [pos.clone()];
+                let reached = false;
+
+                for (let step = 0; step < CONFIG.SOLVER_MAX_STEPS; step++) {
+                    // Update bodies
+                    simBodies.forEach(b => b.update(1 / 60));
+
+                    for (const body of simBodies) {
+                        if (body.type === 'start') continue;
+                        const dir = body.pos.sub(pos);
+                        const dist = dir.length();
+                        if (dist < 0.5) {
+                            if (body.type === 'blackhole') { reached = false; step = CONFIG.SOLVER_MAX_STEPS; break; }
+                            continue;
+                        }
+                        const forceMag = CONFIG.G * body.mass / (dist * dist);
+                        const force = dir.normalize().mul(forceMag * (1 / 60));
+                        vel = vel.add(force);
+                    }
+                    if (!reached && step === CONFIG.SOLVER_MAX_STEPS) break;
+                    pos = pos.add(vel);
+                    path.push(pos.clone());
+
+                    if (pos.x < -100 || pos.x > canvas.width + 100 || pos.y < -100 || pos.y > canvas.height + 100) break;
+                    let collided = false;
+                    for (const body of simBodies) {
+                        if (body.type === 'start' || body.type === 'goal') continue;
+                        if (body.type === 'blackhole') {
+                            if (pos.distance(body.pos) < CONFIG.BLACK_HOLE_CONSUME_RADIUS) { collided = true; break; }
+                        } else {
+                            if (pos.distance(body.pos) < body.radius + CONFIG.PROBE_RADIUS) { collided = true; break; }
+                        }
+                    }
+                    if (collided) break;
+                    if (pos.distance(simGoal) < simGoalRadius) { reached = true; break; }
+                }
+                if (reached) {
+                    // Store ghost path
+                    level.ghostPath = path.filter((_, idx) => idx % 3 === 0);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function generateVerifiedLevel(levelNum) {
+            let attempts = 0;
+            while (attempts < 50) {
+                const level = generateLevel(levelNum);
+                if (solveLevel(level)) return level;
+                attempts++;
+            }
+            // Fallback: return a simple level
+            console.warn('Could not verify level, using fallback');
+            const level = generateLevel(levelNum);
+            level.ghostPath = null;
+            return level;
+        }
+
+        // ============================================================
+        // GAME STATE
+        // ============================================================
+        const state = {
+            level: null,
+            levelNum: 1,
+            bestLevel: 1,
+            probe: null,
+            particles: [],
+            // Aiming
+            aiming: false,
+            dragStart: null,
+            dragCurrent: null,
+            // Game phase
+            phase: 'aiming', // 'aiming','flying','win','loss','transition'
+            failCount: 0,
+            totalFails: 0,
+            // Effects
+            shakeTimer: 0,
+            warpTimer: 0,
+            transitionTimer: 0,
+            // Background stars
+            stars: [],
+            // Frame timing
+            lastTime: 0,
+            dt: 0,
+        };
+
+        // ============================================================
+        // BACKGROUND STARS
+        // ============================================================
+        function initStars() {
+            state.stars = [];
+            for (let i = 0; i < CONFIG.BG_STAR_COUNT; i++) {
+                state.stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    r: Math.random() * 1.8 + 0.3,
+                    twinkle: Math.random() * Math.PI * 2,
+                    speed: 0.3 + Math.random() * 1.5,
+                    brightness: 0.3 + Math.random() * 0.7,
+                });
+            }
+        }
+
+        // ============================================================
+        // RESIZE
+        // ============================================================
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initStars();
+        }
+
+        // ============================================================
+        // LEVEL INIT
+        // ============================================================
+        function loadLevel(num) {
+            state.levelNum = num;
+            state.level = generateVerifiedLevel(num);
+            state.probe = new Probe(state.level.startPos);
+            state.phase = 'aiming';
+            state.aiming = false;
+            state.dragStart = null;
+            state.dragCurrent = null;
+            state.failCount = 0;
+            state.particles = [];
+            state.shakeTimer = 0;
+            state.warpTimer = 0;
+            updateHUD();
+            updateHintButton();
+            msgOverlay.classList.remove('show', 'shake', 'warp');
+            msgOverlay.style.display = 'none';
+        }
+
+        function updateHUD() {
+            lvlDisplay.textContent = state.levelNum;
+            failDisplay.textContent = state.failCount;
+            bestDisplay.textContent = state.bestLevel;
+        }
+
+        function updateHintButton() {
+            if (state.phase === 'aiming' && !state.probe.launched && state.failCount >= CONFIG.HINT_FAIL_THRESHOLD && state.level && state.level.ghostPath) {
+                hintBtn.disabled = false;
+            } else {
+                hintBtn.disabled = true;
+            }
+        }
+
+        // ============================================================
+        // RENDERING
+        // ============================================================
+        function drawBackground() {
+            // Deep midnight blue/black
+            ctx.fillStyle = '#020810';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Static grain
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                if (Math.random() < 0.08) {
+                    const noise = Math.floor(Math.random() * 15);
+                    data[i] = Math.min(255, data[i] + noise);
+                    data[i + 1] = Math.min(255, data[i + 1] + noise);
+                    data[i + 2] = Math.min(255, data[i + 2] + noise);
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+
+            // Stars
+            for (const star of state.stars) {
+                star.twinkle += star.speed * (state.dt || 0.016);
+                const alpha = star.brightness * (0.5 + 0.5 * Math.sin(star.twinkle));
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function drawGhostHint() {
+            if (!state.level || !state.level.ghostPath || state.phase !== 'aiming') return;
+            if (state.failCount < CONFIG.HINT_FAIL_THRESHOLD && !hintBtn.dataset.forceShow) return;
+
+            const path = state.level.ghostPath;
+            ctx.globalAlpha = 0.3;
+            ctx.strokeStyle = '#00ff8840';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([3, 8]);
+            ctx.shadowColor = '#00ff88';
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.moveTo(path[0].x, path[0].y);
+            for (let i = 1; i < path.length; i++) {
+                ctx.lineTo(path[i].x, path[i].y);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+        }
+
+        function drawDragLine() {
+            if (!state.aiming || !state.dragStart || !state.dragCurrent) return;
+            const start = state.probe.startPos;
+            const drag = state.dragCurrent;
+            const dist = drag.distance(start);
+            if (dist < 5) return;
+
+            // Slingshot band
+            ctx.strokeStyle = '#00f2ff';
+            ctx.lineWidth = 2;
+            ctx.shadowColor = '#00f2ff';
+            ctx.shadowBlur = 12;
+            ctx.globalAlpha = 0.7;
+            ctx.setLineDash([2, 4]);
+            ctx.beginPath();
+            ctx.moveTo(start.x, start.y);
+            ctx.lineTo(drag.x, drag.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Drag point glow
+            ctx.fillStyle = '#00f2ff';
+            ctx.shadowBlur = 14;
+            ctx.beginPath();
+            ctx.arc(drag.x, drag.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+        }
+
+        function drawAll() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Apply shake
+            let shakeX = 0, shakeY = 0;
+            if (state.shakeTimer > 0) {
+                shakeX = (Math.random() - 0.5) * state.shakeTimer * 3;
+                shakeY = (Math.random() - 0.5) * state.shakeTimer * 3;
+            }
+            ctx.save();
+            ctx.translate(shakeX, shakeY);
+
+            // Apply warp
+            if (state.warpTimer > 0) {
+                const t = state.warpTimer;
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.scale(1 + t * 3, 1 / (1 + t * 2));
+                ctx.translate(-canvas.width / 2, -canvas.height / 2);
+                ctx.globalAlpha = 1 - t;
+            }
+
+            drawBackground();
+
+            // Draw bodies
+            if (state.level) {
+                for (const body of state.level.bodies) {
+                    body.draw(ctx, true);
+                }
+            }
+
+            // Draw ghost hint
+            drawGhostHint();
+
+            // Draw drag line
+            drawDragLine();
+
+            // Draw probe
+            if (state.probe) state.probe.draw(ctx);
+
+            // Draw particles
+            for (const p of state.particles) {
+                p.draw(ctx);
+            }
+
+            ctx.restore();
+        }
+
+        // ============================================================
+        // PARTICLE EFFECTS
+        // ============================================================
+        function spawnExplosion(pos, color, count = 30) {
+            for (let i = 0; i < count; i++) {
+                state.particles.push(new Particle(pos, color, 20 + Math.random() * 30));
+            }
+        }
+
+        // ============================================================
+        // GAME LOGIC
+        // ============================================================
+        function launchProbe() {
+            if (!state.aiming || !state.dragStart || !state.dragCurrent || state.probe.launched) return;
+
+            const start = state.probe.startPos;
+            const drag = state.dragCurrent;
+            const dir = start.sub(drag);
+            const dist = dir.length();
+            if (dist < 3) return;
+
+            const speed = Math.min(CONFIG.MAX_LAUNCH_SPEED, CONFIG.MIN_LAUNCH_SPEED + dist * CONFIG.DRAG_SENSITIVITY);
+            const velocity = dir.normalize().mul(speed);
+
+            state.probe.launch(velocity);
+            state.phase = 'flying';
+            state.aiming = false;
+            state.dragStart = null;
+            state.dragCurrent = null;
+            state.probe.predictionPath = [];
+        }
+
+        function checkCollisions() {
+            const probe = state.probe;
+            if (!probe.launched || !probe.alive) return;
+
+            // Bounds check
+            if (probe.pos.x < -50 || probe.pos.x > canvas.width + 50 || probe.pos.y < -50 || probe.pos.y > canvas.height + 50) {
+                triggerLoss('OUT OF RANGE');
+                return;
+            }
+
+            // Body collisions
+            for (const body of state.level.bodies) {
+                if (body.type === 'start') continue;
+                if (body.type === 'goal') {
+                    if (probe.pos.distance(body.pos) < state.level.goalRadius) {
+                        triggerWin();
+                        return;
+                    }
+                    continue;
+                }
+                if (body.type === 'blackhole') {
+                    if (probe.pos.distance(body.pos) < CONFIG.BLACK_HOLE_CONSUME_RADIUS) {
+                        triggerLoss('CONSUMED BY SINGULARITY');
+                        return;
+                    }
+                    continue;
+                }
+                // Planet collision
+                if (probe.pos.distance(body.pos) < body.radius + CONFIG.PROBE_RADIUS) {
+                    triggerLoss('SIGNAL LOST');
+                    return;
+                }
+            }
+        }
+
+        function triggerWin() {
+            state.phase = 'win';
+            state.probe.alive = false;
+            spawnExplosion(state.probe.pos, '#00ff88', 50);
+            state.warpTimer = 0;
+            // Show warp message
+            msgOverlay.textContent = 'WARP DRIVE ENGAGED';
+            msgOverlay.style.color = '#00ff88';
+            msgOverlay.style.textShadow = '0 0 12px #00ff88, 0 0 30px #00ff8860';
+            msgOverlay.classList.add('show', 'warp');
+            msgOverlay.style.display = 'block';
+
+            // Advance
+            const nextLevel = state.levelNum + 1;
+            if (nextLevel > state.bestLevel) {
+                state.bestLevel = nextLevel;
+                try { localStorage.setItem('neonOrbiterBest', state.bestLevel); } catch (e) { }
+            }
+            updateHUD();
+
+            setTimeout(() => {
+                msgOverlay.classList.remove('show', 'warp');
+                msgOverlay.style.display = 'none';
+                showLevelTransition(nextLevel);
+            }, 1400);
+        }
+
+        function triggerLoss(msg) {
+            state.phase = 'loss';
+            state.probe.alive = false;
+            state.failCount++;
+            state.totalFails++;
+            spawnExplosion(state.probe.pos, '#ff00ff', 25);
+            state.shakeTimer = 1;
+
+            msgOverlay.textContent = msg || 'SIGNAL LOST';
+            msgOverlay.style.color = '#ff00ff';
+            msgOverlay.style.textShadow = '0 0 12px #ff00ff, 0 0 30px #ff00ff60';
+            msgOverlay.classList.add('show', 'shake');
+            msgOverlay.style.display = 'block';
+            updateHUD();
+            updateHintButton();
+
+            setTimeout(() => {
+                msgOverlay.classList.remove('show', 'shake');
+                msgOverlay.style.display = 'none';
+                resetLevel();
+            }, 1200);
+        }
+
+        function resetLevel() {
+            state.probe.reset();
+            state.phase = 'aiming';
+            state.aiming = false;
+            state.dragStart = null;
+            state.dragCurrent = null;
+            state.particles = [];
+            state.shakeTimer = 0;
+            state.warpTimer = 0;
+            updateHintButton();
+        }
+
+        function showLevelTransition(nextLevel) {
+            state.levelNum = nextLevel;
+            transitionText.textContent = 'LEVEL ' + nextLevel;
+            levelTransition.classList.add('active');
+            levelTransition.style.display = 'flex';
+
+            setTimeout(() => {
+                levelTransition.classList.remove('active');
+                levelTransition.style.display = 'none';
+                loadLevel(nextLevel);
+            }, 1200);
+        }
+
+        function computePredictionPath() {
+            if (!state.aiming || !state.dragStart || !state.dragCurrent) return;
+            const start = state.probe.startPos;
+            const drag = state.dragCurrent;
+            const dir = start.sub(drag);
+            const dist = dir.length();
+            if (dist < 3) { state.probe.predictionPath = []; return; }
+            const speed = Math.min(CONFIG.MAX_LAUNCH_SPEED, CONFIG.MIN_LAUNCH_SPEED + dist * CONFIG.DRAG_SENSITIVITY);
+            const vel = dir.normalize().mul(speed);
+
+            // Simulate forward
+            let pos = start.clone();
+            let velocity = vel.clone();
+            const path = [pos.clone()];
+            const totalSteps = 200;
+            const predictSteps = Math.floor(totalSteps * CONFIG.PREDICTION_FRACTION);
+
+            for (let i = 0; i < predictSteps; i++) {
+                for (const body of state.level.bodies) {
+                    if (body.type === 'start') continue;
+                    const d = body.pos.sub(pos);
+                    const dst = d.length();
+                    if (dst < 0.5) continue;
+                    const fm = CONFIG.G * body.mass / (dst * dst);
+                    velocity = velocity.add(d.normalize().mul(fm * (1 / 60)));
+                }
+                pos = pos.add(velocity);
+                path.push(pos.clone());
+                if (pos.x < -50 || pos.x > canvas.width + 50 || pos.y < -50 || pos.y > canvas.height + 50) break;
+                let hit = false;
+                for (const body of state.level.bodies) {
+                    if (body.type === 'start' || body.type === 'goal') continue;
+                    if (body.type === 'blackhole') { if (pos.distance(body.pos) < CONFIG.BLACK_HOLE_CONSUME_RADIUS) { hit = true; break; } }
+                    else { if (pos.distance(body.pos) < body.radius + CONFIG.PROBE_RADIUS) { hit = true; break; } }
+                }
+                if (hit) { path.push(pos.clone()); break; }
+            }
+            state.probe.predictionPath = path;
+        }
+
+        // ============================================================
+        // GAME LOOP
+        // ============================================================
+        function update(dt) {
+            state.dt = Math.min(dt, 0.1);
+
+            // Update shake
+            if (state.shakeTimer > 0) {
+                state.shakeTimer -= dt * 4;
+                if (state.shakeTimer < 0) state.shakeTimer = 0;
+            }
+
+            // Update warp
+            if (state.warpTimer > 0 || state.phase === 'win') {
+                state.warpTimer += dt;
+            }
+
+            // Update bodies
+            if (state.level && state.phase !== 'transition') {
+                for (const body of state.level.bodies) {
+                    body.update(state.dt);
+                }
+            }
+
+            // Update probe
+            if (state.probe && state.probe.launched && state.probe.alive) {
+                state.probe.update(state.dt, state.level.bodies);
+                checkCollisions();
+            }
+
+            // Update particles
+            state.particles = state.particles.filter(p => p.update());
+
+            // Compute prediction path while aiming
+            if (state.phase === 'aiming' && state.aiming) {
+                computePredictionPath();
+            }
+        }
+
+        function gameLoop(time) {
+            const dt = state.lastTime ? (time - state.lastTime) / 1000 : 0.016;
+            state.lastTime = time;
+            update(dt);
+            drawAll();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ============================================================
+        // INPUT HANDLING
+        // ============================================================
+        function getEventPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return new Vec2(e.clientX - rect.left, e.clientY - rect.top);
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (state.phase !== 'aiming' || state.probe.launched) return;
+            const pos = getEventPos(e);
+            const start = state.probe.startPos;
+            // Allow dragging from near the probe
+            if (pos.distance(start) < 80) {
+                state.aiming = true;
+                state.dragStart = pos.clone();
+                state.dragCurrent = pos.clone();
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!state.aiming) return;
+            state.dragCurrent = getEventPos(e);
+            computePredictionPath();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (!state.aiming) return;
+            launchProbe();
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            if (state.aiming) launchProbe();
+        });
+
+        // Touch events
+        canvas.addEventListener('touchstart', (e) => {
+            if (state.phase !== 'aiming' || state.probe.launched) return;
+            e.preventDefault();
+            const pos = getEventPos(e.touches[0]);
+            const start = state.probe.startPos;
+            if (pos.distance(start) < 100) {
+                state.aiming = true;
+                state.dragStart = pos.clone();
+                state.dragCurrent = pos.clone();
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (!state.aiming) return;
+            e.preventDefault();
+            state.dragCurrent = getEventPos(e.touches[0]);
+            computePredictionPath();
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            if (!state.aiming) return;
+            e.preventDefault();
+            launchProbe();
+        });
+
+        // Hint button
+        hintBtn.addEventListener('click', () => {
+            if (state.phase === 'aiming' && !state.probe.launched && state.level && state.level.ghostPath) {
+                hintBtn.dataset.forceShow = 'true';
+                setTimeout(() => { delete hintBtn.dataset.forceShow; }, 3000);
+            }
+        });
+
+        // Keyboard reset
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'r' || e.key === 'R') {
+                if (state.phase === 'flying' || state.phase === 'loss') {
+                    resetLevel();
+                }
+            }
+        });
+
+        // ============================================================
+        // INIT
+        // ============================================================
+        function init() {
+            resize();
+            window.addEventListener('resize', () => {
+                resize();
+                if (state.level) {
+                    // Re-anchor start and goal
+                    // For simplicity, reload the level
+                    state.level.startPos = state.probe.startPos;
+                }
+            });
+
+            // Load best level
+            try {
+                const saved = localStorage.getItem('neonOrbiterBest');
+                if (saved) state.bestLevel = parseInt(saved) || 1;
+            } catch (e) { }
+
+            loadLevel(state.bestLevel);
+            updateHUD();
+            requestAnimationFrame(gameLoop);
+        }
+
+        init();
+    </script>
+</body>
+
+</html>

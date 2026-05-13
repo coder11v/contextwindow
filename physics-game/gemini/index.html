@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEON-ORBITER: Event Horizon</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #030308;
+            --cyan: #00f2ff;
+            --magenta: #ff00ff;
+            --emerald: #00ff88;
+            --crimson: #ff0055;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: white;
+            font-family: 'Share Tech Mono', monospace;
+            overflow: hidden;
+            user-select: none;
+            touch-action: none;
+        }
+
+        /* Noise & Gradient Background */
+        #bg-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background: radial-gradient(circle at center, #0a0a1a 0%, #020205 100%);
+        }
+
+        #bg-layer::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+            pointer-events: none;
+        }
+
+        #game-canvas {
+            position: absolute;
+            z-index: 10;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), filter 0.5s;
+        }
+
+        /* Screen Shake */
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translate(0, 0);
+            }
+
+            10%,
+            30%,
+            50%,
+            70%,
+            90% {
+                transform: translate(-5px, 5px);
+            }
+
+            20%,
+            40%,
+            60%,
+            80% {
+                transform: translate(5px, -5px);
+            }
+        }
+
+        .shake-active {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        /* Warp Drive */
+        .warp-active {
+            transform: scaleX(4) scaleY(0.1);
+            filter: blur(8px) hue-rotate(90deg);
+        }
+
+        /* UI Overlays */
+        #ui-layer {
+            position: absolute;
+            z-index: 20;
+            inset: 0;
+            pointer-events: none;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .glitch-text {
+            position: relative;
+        }
+
+        .glitch-text::before,
+        .glitch-text::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0.8;
+        }
+
+        .glitch-text::before {
+            color: var(--cyan);
+            z-index: -1;
+            transform: translate(-2px, 1px);
+        }
+
+        .glitch-text::after {
+            color: var(--magenta);
+            z-index: -2;
+            transform: translate(2px, -1px);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .hud-text {
+            text-shadow: 0 0 8px currentColor;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="bg-layer"></div>
+    <canvas id="game-canvas"></canvas>
+
+    <div id="ui-layer">
+        <div class="flex justify-between items-start w-full">
+            <div>
+                <h1 id="level-display" class="text-3xl font-bold text-[#00f2ff] hud-text glitch-text"
+                    data-text="LEVEL 1">LEVEL 1</h1>
+                <p id="fails-display" class="text-sm text-gray-400 mt-1 hidden">FAILS: 0 / 10 (Hint offline)</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-500">MAX LEVEL</p>
+                <p id="high-score" class="text-xl text-[#00ff88] hud-text">1</p>
+            </div>
+        </div>
+
+        <div id="center-message" class="flex-grow flex items-center justify-center flex-col hidden">
+            <h2 id="msg-title" class="text-5xl font-bold mb-2 tracking-widest uppercase"></h2>
+            <p id="msg-sub" class="text-xl text-gray-300"></p>
+        </div>
+
+        <div class="w-full text-center pb-4">
+            <p id="status-text" class="text-sm text-gray-500 tracking-widest animate-pulse">DRAG TO CALIBRATE LAUNCH
+                VECTOR</p>
+        </div>
+    </div>
+
+    <script>
+        /** CORE CONSTANTS & CONFIG **/
+        const G = 0.5; // Gravitational Constant
+        const MAX_POWER = 18;
+        const DRAG_SCALE = 0.05;
+        const FPS = 60;
+        const DT = 1;
+
+        // Aesthetic Colors
+        const C_CYAN = '#00f2ff';
+        const C_MAGENTA = '#ff00ff';
+        const C_EMERALD = '#00ff88';
+        const C_CRIMSON = '#ff0055';
+
+        /** STATE MANAGEMENT **/
+        let canvas, ctx, W, H;
+        let level = 1;
+        let fails = 0;
+        let maxLevel = localStorage.getItem('neonOrbiterMaxLevel') || 1;
+
+        let state = 'INIT'; // INIT, GEN, PLAY, DRAG, FLY, WARP, DEAD
+
+        // Entities
+        let probe = null;
+        let goal = null;
+        let planets = [];
+
+        // Input & Interaction
+        let dragStart = { x: 0, y: 0 };
+        let dragCurrent = { x: 0, y: 0 };
+        let ghostVector = null; // Stored successful launch vector
+        let physicsTime = 0; // Tracks time for orbital/pulsing mechanics
+
+        /** UI ELEMENTS **/
+        const ui = {
+            level: document.getElementById('level-display'),
+            fails: document.getElementById('fails-display'),
+            highScore: document.getElementById('high-score'),
+            center: document.getElementById('center-message'),
+            msgTitle: document.getElementById('msg-title'),
+            msgSub: document.getElementById('msg-sub'),
+            status: document.getElementById('status-text'),
+            canvas: document.getElementById('game-canvas')
+        };
+
+        /** INITIALIZATION **/
+        function init() {
+            canvas = ui.canvas;
+            ctx = canvas.getContext('2d');
+            resize();
+            window.addEventListener('resize', resize);
+
+            ui.highScore.innerText = maxLevel;
+
+            // Input Listeners
+            window.addEventListener('pointerdown', handleDown);
+            window.addEventListener('pointermove', handleMove);
+            window.addEventListener('pointerup', handleUp);
+
+            startLevelGeneration();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resize() {
+            W = canvas.width = window.innerWidth;
+            H = canvas.height = window.innerHeight;
+        }
+
+        /** PROCEDURAL GENERATION & REVERSE VALIDATION **/
+        async function startLevelGeneration() {
+            state = 'GEN';
+            ui.status.innerText = "COMPUTING MULTIVERSE TRAJECTORIES...";
+            ui.status.style.color = C_MAGENTA;
+            probe = null; planets = []; goal = null; ghostVector = null;
+
+            // Yield to let UI update
+            await new Promise(r => setTimeout(r, 50));
+
+            let solved = false;
+            let attempts = 0;
+
+            while (!solved) {
+                attempts++;
+                // 1. Generate random layout based on level curve
+                let layout = generateLayout(level);
+
+                // 2. Run simulation solver (up to 2000 vectors)
+                let solution = solveLayout(layout);
+
+                if (solution) {
+                    // Verified Layout!
+                    applyLayout(layout);
+                    ghostVector = solution;
+                    solved = true;
+                }
+
+                // Prevent absolute lockup, yield every 10 attempts
+                if (attempts % 10 === 0) await new Promise(r => setTimeout(r, 0));
+            }
+
+            ui.level.innerText = `LEVEL ${level}`;
+            ui.level.setAttribute('data-text', `LEVEL ${level}`);
+            ui.fails.innerText = `FAILS: ${fails} / 10 (Hint ${fails >= 10 ? 'READY' : 'OFFLINE'})`;
+            ui.fails.classList.remove('hidden');
+            ui.status.innerText = "DRAG TO CALIBRATE LAUNCH VECTOR";
+            ui.status.style.color = "gray";
+            state = 'PLAY';
+        }
+
+        function generateLayout(lvl) {
+            let numPlanets = Math.min(8, 3 + Math.floor(lvl / 4));
+            let gRad = Math.max(15, 40 - (lvl * 0.5));
+
+            let startX = Math.random() < 0.5 ? W * 0.1 : W * 0.9;
+            let startY = H * 0.1 + Math.random() * (H * 0.8);
+
+            let gX = startX < W * 0.5 ? W * 0.9 : W * 0.1;
+            let gY = H * 0.1 + Math.random() * (H * 0.8);
+
+            let genPlanets = [];
+            for (let i = 0; i < numPlanets; i++) {
+                let p = {
+                    x: W * 0.2 + Math.random() * (W * 0.6),
+                    y: H * 0.1 + Math.random() * (H * 0.8),
+                    r: 15 + Math.random() * 25,
+                    baseMass: 1000 + Math.random() * 3000,
+                    isBlackHole: false, orbitSpeed: 0, orbitRadius: 0,
+                    orbitCenter: { x: 0, y: 0 }, pulseRate: 0, pulseAmp: 0
+                };
+
+                // Keep away from start/goal
+                let distS = Math.hypot(p.x - startX, p.y - startY);
+                let distG = Math.hypot(p.x - gX, p.y - gY);
+                if (distS < 100 || distG < 100) continue;
+
+                // Difficulty Curve Mechanics
+                if (lvl >= 6 && Math.random() > 0.4) {
+                    p.orbitCenter = { x: p.x, y: p.y };
+                    p.orbitRadius = 20 + Math.random() * 60;
+                    p.orbitSpeed = (Math.random() > 0.5 ? 1 : -1) * (0.01 + Math.random() * 0.02);
+                }
+                if (lvl >= 16 && Math.random() > 0.4) {
+                    p.pulseRate = 0.02 + Math.random() * 0.05;
+                    p.pulseAmp = p.baseMass * 0.7;
+                }
+                if (lvl >= 30 && Math.random() > 0.7) {
+                    p.isBlackHole = true;
+                    p.baseMass *= 2.5; // Massive pull
+                    p.r = 10; // Tiny event horizon
+                }
+                genPlanets.push(p);
+            }
+
+            return {
+                start: { x: startX, y: startY },
+                goal: { x: gX, y: gY, r: gRad },
+                planets: genPlanets
+            };
+        }
+
+        function solveLayout(layout) {
+            const SIM_TICKS = 450;
+            const TRIES = 1500;
+
+            for (let i = 0; i < TRIES; i++) {
+                let angle = Math.random() * Math.PI * 2;
+                let pwr = 2 + Math.random() * (MAX_POWER - 2);
+                let vx = Math.cos(angle) * pwr;
+                let vy = Math.sin(angle) * pwr;
+
+                // Run lightweight simulation
+                let simProbe = { x: layout.start.x, y: layout.start.y, vx: vx, vy: vy };
+                let success = false;
+                let dead = false;
+
+                for (let t = 0; t < SIM_TICKS; t++) {
+                    let res = stepPhysics(simProbe, layout.planets, layout.goal, t);
+                    if (res === 'WIN') { success = true; break; }
+                    if (res === 'DEAD') { dead = true; break; }
+
+                    if (simProbe.x < 0 || simProbe.x > W || simProbe.y < 0 || simProbe.y > H) {
+                        dead = true; break; // Out of bounds
+                    }
+                }
+                if (success) return { vx, vy, pwr }; // Found a working vector!
+            }
+            return null;
+        }
+
+        function applyLayout(layout) {
+            probe = { x: layout.start.x, y: layout.start.y, vx: 0, vy: 0, trail: [] };
+            goal = layout.goal;
+            planets = layout.planets;
+            physicsTime = 0;
+        }
+
+        /** PHYSICS ENGINE **/
+        // Returns 'WIN', 'DEAD', or 'CONT'
+        function stepPhysics(pr, plArray, gl, time) {
+            let ax = 0, ay = 0;
+
+            for (let i = 0; i < plArray.length; i++) {
+                let p = plArray[i];
+
+                // Calculate current position (Orbit)
+                let px = p.x; let py = p.y;
+                if (p.orbitSpeed !== 0) {
+                    px = p.orbitCenter.x + Math.cos(time * p.orbitSpeed) * p.orbitRadius;
+                    py = p.orbitCenter.y + Math.sin(time * p.orbitSpeed) * p.orbitRadius;
+                }
+
+                let dx = px - pr.x;
+                let dy = py - pr.y;
+                let distSq = dx * dx + dy * dy;
+                let dist = Math.sqrt(distSq);
+
+                // Collision with planet
+                if (dist < p.r + 2) return 'DEAD';
+
+                // Calculate current mass (Pulsing)
+                let m = p.baseMass;
+                if (p.pulseRate !== 0) {
+                    m += Math.sin(time * p.pulseRate) * p.pulseAmp;
+                }
+
+                // Gravity F = G*m / r^2
+                let force = (G * m) / Math.max(distSq, 100);
+                ax += (dx / dist) * force;
+                ay += (dy / dist) * force;
+            }
+
+            pr.vx += ax * DT;
+            pr.vy += ay * DT;
+            pr.x += pr.vx * DT;
+            pr.y += pr.vy * DT;
+
+            // Check Goal
+            let gDistSq = (gl.x - pr.x) ** 2 + (gl.y - pr.y) ** 2;
+            if (gDistSq < (gl.r) ** 2) return 'WIN';
+
+            return 'CONT';
+        }
+
+        /** INPUT HANDLING **/
+        function handleDown(e) {
+            if (state !== 'PLAY' && state !== 'DRAG') return;
+            state = 'DRAG';
+            dragStart.x = e.clientX;
+            dragStart.y = e.clientY;
+            dragCurrent.x = e.clientX;
+            dragCurrent.y = e.clientY;
+        }
+
+        function handleMove(e) {
+            if (state === 'DRAG') {
+                dragCurrent.x = e.clientX;
+                dragCurrent.y = e.clientY;
+            }
+        }
+
+        function handleUp(e) {
+            if (state !== 'DRAG') return;
+
+            let dx = dragStart.x - dragCurrent.x;
+            let dy = dragStart.y - dragCurrent.y;
+
+            let pwr = Math.sqrt(dx * dx + dy * dy) * DRAG_SCALE;
+            if (pwr > 0.5) {
+                if (pwr > MAX_POWER) {
+                    let angle = Math.atan2(dy, dx);
+                    dx = Math.cos(angle) * (MAX_POWER / DRAG_SCALE);
+                    dy = Math.sin(angle) * (MAX_POWER / DRAG_SCALE);
+                }
+                probe.vx = dx * DRAG_SCALE;
+                probe.vy = dy * DRAG_SCALE;
+                state = 'FLY';
+                ui.status.innerText = "PHOTON PROBE IN TRANSIT";
+            } else {
+                state = 'PLAY'; // Tap without drag cancels
+            }
+        }
+
+        /** GAME LOOP & RENDERING **/
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update() {
+            if (state === 'FLY') {
+                physicsTime++;
+                let res = stepPhysics(probe, planets, goal, physicsTime);
+
+                probe.trail.push({ x: probe.x, y: probe.y });
+                if (probe.trail.length > 80) probe.trail.shift();
+
+                if (res === 'DEAD' || probe.x < 0 || probe.x > W || probe.y < 0 || probe.y > H) {
+                    triggerLoss();
+                } else if (res === 'WIN') {
+                    triggerWin();
+                }
+            } else if (state === 'PLAY' || state === 'DRAG') {
+                physicsTime++; // Keep planets moving even while aiming
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, W, H);
+            if (state === 'GEN' || !probe) return;
+
+            // Draw Planets
+            for (let p of planets) {
+                let px = p.x; let py = p.y;
+                if (p.orbitSpeed !== 0) {
+                    px = p.orbitCenter.x + Math.cos(physicsTime * p.orbitSpeed) * p.orbitRadius;
+                    py = p.orbitCenter.y + Math.sin(physicsTime * p.orbitSpeed) * p.orbitRadius;
+                }
+
+                let m = p.baseMass;
+                if (p.pulseRate !== 0) m += Math.sin(physicsTime * p.pulseRate) * p.pulseAmp;
+
+                ctx.beginPath();
+                ctx.arc(px, py, p.r, 0, Math.PI * 2);
+
+                if (p.isBlackHole) {
+                    ctx.fillStyle = '#000';
+                    ctx.fill();
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = C_CRIMSON;
+                    ctx.strokeStyle = C_CRIMSON;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    // Event Horizon accretion disk
+                    ctx.beginPath();
+                    ctx.arc(px, py, p.r + 5, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                } else {
+                    ctx.fillStyle = '#110011';
+                    ctx.fill();
+                    let pulseScale = (m / p.baseMass);
+                    ctx.shadowBlur = 15 * pulseScale;
+                    ctx.shadowColor = C_MAGENTA;
+                    ctx.strokeStyle = C_MAGENTA;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+                ctx.shadowBlur = 0; // Reset
+            }
+
+            // Draw Goal (Singularity Gate)
+            ctx.beginPath();
+            ctx.arc(goal.x, goal.y, goal.r, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0, 255, 136, 0.1)';
+            ctx.fill();
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = C_EMERALD;
+            ctx.strokeStyle = C_EMERALD;
+            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.shadowBlur = 0;
+
+            // Draw Prediction Trajectory
+            if (state === 'DRAG') {
+                let dx = dragStart.x - dragCurrent.x;
+                let dy = dragStart.y - dragCurrent.y;
+                let pwr = Math.sqrt(dx * dx + dy * dy) * DRAG_SCALE;
+
+                if (pwr > 0.5) {
+                    if (pwr > MAX_POWER) {
+                        let angle = Math.atan2(dy, dx);
+                        dx = Math.cos(angle) * (MAX_POWER / DRAG_SCALE);
+                        dy = Math.sin(angle) * (MAX_POWER / DRAG_SCALE);
+                    }
+
+                    // Simulate ahead
+                    let simPr = { x: probe.x, y: probe.y, vx: dx * DRAG_SCALE, vy: dy * DRAG_SCALE };
+                    ctx.beginPath();
+                    ctx.moveTo(simPr.x, simPr.y);
+                    let hit = false;
+
+                    for (let t = 0; t < 80; t++) { // Predict 80 frames
+                        if (stepPhysics(simPr, planets, goal, physicsTime + t) !== 'CONT') hit = true;
+                        ctx.lineTo(simPr.x, simPr.y);
+                        if (hit) break;
+                    }
+                    ctx.strokeStyle = 'rgba(0, 242, 255, 0.3)';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([4, 4]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+
+            // Draw Hint (Ghost Vector) if fails >= 10
+            if ((state === 'PLAY' || state === 'DRAG') && fails >= 10 && ghostVector) {
+                ctx.beginPath();
+                ctx.moveTo(probe.x, probe.y);
+                ctx.lineTo(probe.x + ghostVector.vx * 10, probe.y + ghostVector.vy * 10);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            }
+
+            // Draw Probe Trail
+            if (probe.trail.length > 0) {
+                ctx.beginPath();
+                ctx.moveTo(probe.trail[0].x, probe.trail[0].y);
+                for (let i = 1; i < probe.trail.length; i++) {
+                    ctx.lineTo(probe.trail[i].x, probe.trail[i].y);
+                }
+                ctx.strokeStyle = 'rgba(0, 242, 255, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = C_CYAN;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            // Draw Probe
+            ctx.beginPath();
+            ctx.arc(probe.x, probe.y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = C_CYAN;
+            ctx.strokeStyle = C_CYAN;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        /** WIN / LOSS TRIGGERS **/
+        function triggerWin() {
+            state = 'WARP';
+            fails = 0;
+            level++;
+            if (level > maxLevel) {
+                maxLevel = level;
+                localStorage.setItem('neonOrbiterMaxLevel', maxLevel);
+                ui.highScore.innerText = maxLevel;
+            }
+
+            ui.canvas.classList.add('warp-active');
+            ui.center.classList.remove('hidden');
+            ui.msgTitle.innerText = "WARP DRIVE ENGAGED";
+            ui.msgTitle.style.color = C_EMERALD;
+            ui.msgSub.innerText = `Jumping to Level ${level}...`;
+            ui.fails.classList.add('hidden');
+
+            setTimeout(() => {
+                ui.canvas.classList.remove('warp-active');
+                ui.center.classList.add('hidden');
+                startLevelGeneration();
+            }, 1200);
+        }
+
+        function triggerLoss() {
+            state = 'DEAD';
+            fails++;
+
+            ui.canvas.classList.add('shake-active');
+            ui.center.classList.remove('hidden');
+            ui.msgTitle.innerText = "SIGNAL LOST";
+            ui.msgTitle.style.color = C_CRIMSON;
+            ui.msgTitle.classList.add('glitch-text');
+            ui.msgTitle.setAttribute('data-text', 'SIGNAL LOST');
+            ui.msgSub.innerText = "Probe destroyed. Recalibrating...";
+
+            setTimeout(() => {
+                ui.canvas.classList.remove('shake-active');
+                ui.center.classList.add('hidden');
+                ui.msgTitle.classList.remove('glitch-text');
+
+                // Reset probe to start without regenerating layout
+                probe.vx = 0; probe.vy = 0;
+                probe.trail = [];
+                probe.x = dragStart.x = dragCurrent.x = W * (probe.x > W / 2 ? 0.9 : 0.1); // approximation of start
+                // To be precise, re-apply initial state layout
+                physicsTime = 0;
+                state = 'PLAY';
+                ui.fails.innerText = `FAILS: ${fails} / 10 (Hint ${fails >= 10 ? 'READY' : 'OFFLINE'})`;
+                ui.status.innerText = "DRAG TO CALIBRATE LAUNCH VECTOR";
+                ui.status.style.color = "gray";
+
+                // Small hack to precisely restore start pos
+                planets.forEach(p => p.pulseAmp = p.pulseAmp); // dummy op
+
+            }, 1000);
+
+            // Exact start restoration relies on storing it. We know it's derived from level generation.
+            // Let's explicitly save the spawn point when applyLayout runs.
+        }
+
+        // Override applyLayout to save spawn
+        const originalApply = applyLayout;
+        applyLayout = function (layout) {
+            originalApply(layout);
+            probe.spawnX = layout.start.x;
+            probe.spawnY = layout.start.y;
+        }
+
+        // Update triggerLoss to use spawn coordinates precisely
+        const originalLoss = triggerLoss;
+        triggerLoss = function () {
+            state = 'DEAD';
+            fails++;
+            ui.canvas.classList.add('shake-active');
+            ui.center.classList.remove('hidden');
+            ui.msgTitle.innerText = "SIGNAL LOST";
+            ui.msgTitle.style.color = C_CRIMSON;
+            ui.msgTitle.classList.add('glitch-text');
+            ui.msgTitle.setAttribute('data-text', 'SIGNAL LOST');
+            ui.msgSub.innerText = "Probe destroyed. Recalibrating...";
+
+            setTimeout(() => {
+                ui.canvas.classList.remove('shake-active');
+                ui.center.classList.add('hidden');
+                ui.msgTitle.classList.remove('glitch-text');
+
+                probe.x = probe.spawnX;
+                probe.y = probe.spawnY;
+                probe.vx = 0; probe.vy = 0;
+                probe.trail = [];
+                physicsTime = 0;
+                state = 'PLAY';
+
+                ui.fails.innerText = `FAILS: ${fails} / 10 (Hint ${fails >= 10 ? 'READY' : 'OFFLINE'})`;
+                ui.status.innerText = "DRAG TO CALIBRATE LAUNCH VECTOR";
+            }, 800);
+        }
+
+        // Start Game
+        window.onload = init;
+    </script>
+</body>
+
+</html>

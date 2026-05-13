@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NEON-ORBITER: Event Horizon</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+        :root {
+            --bg: #02030a;
+            --cyan: #00f2ff;
+            --magenta: #ff00ff;
+            --emerald: #00ff88;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: radial-gradient(circle at 40% 15%, #0a0f2a 0%, var(--bg) 55%, #000 100%);
+            font-family: 'JetBrains Mono', monospace;
+            color: #d7f8ff;
+        }
+
+        #app {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        #game {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: crosshair;
+        }
+
+        .hud {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            text-shadow: 0 0 10px rgba(0, 242, 255, 0.4);
+        }
+
+        .topline {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            font-size: 13px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .brand {
+            color: var(--cyan);
+            font-weight: 700;
+            text-shadow: 0 0 18px rgba(0, 242, 255, 0.7);
+        }
+
+        .status {
+            color: #d4cbff;
+        }
+
+        .bottomline {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            opacity: 0.9;
+            letter-spacing: 0.04em;
+        }
+
+        .center-message {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: clamp(18px, 3vw, 32px);
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            color: var(--emerald);
+            text-shadow: 0 0 8px rgba(0, 255, 136, 0.85), 0 0 28px rgba(0, 255, 136, 0.45);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .center-message.show {
+            opacity: 1;
+        }
+
+        .glitch {
+            animation: glitchIn 0.95s ease both;
+        }
+
+        .shake {
+            animation: shake 0.38s linear;
+        }
+
+        .warp {
+            animation: warp 0.75s ease-out;
+        }
+
+        @keyframes glitchIn {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) skewX(20deg) scale(1.2);
+                filter: blur(4px);
+            }
+
+            20% {
+                opacity: 1;
+                transform: translate(calc(-50% + 4px), calc(-50% - 2px));
+            }
+
+            35% {
+                transform: translate(calc(-50% - 5px), calc(-50% + 2px));
+            }
+
+            55% {
+                transform: translate(calc(-50% + 3px), calc(-50% - 1px)) skewX(-8deg);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translate(-50%, -50%) skewX(0deg) scale(1);
+                filter: blur(0);
+            }
+        }
+
+        @keyframes shake {
+            0% {
+                transform: translate(0, 0);
+            }
+
+            25% {
+                transform: translate(6px, -4px);
+            }
+
+            50% {
+                transform: translate(-7px, 4px);
+            }
+
+            75% {
+                transform: translate(5px, 2px);
+            }
+
+            100% {
+                transform: translate(0, 0);
+            }
+        }
+
+        @keyframes warp {
+            0% {
+                transform: scale(1, 1) skewX(0deg);
+                filter: saturate(1.2);
+            }
+
+            25% {
+                transform: scale(1.06, 0.92) skewX(4deg);
+                filter: brightness(1.35);
+            }
+
+            100% {
+                transform: scale(1, 1) skewX(0deg);
+                filter: saturate(1);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <canvas id="game"></canvas>
+
+        <div class="hud">
+            <div class="topline">
+                <div class="brand">NEON-ORBITER: Event Horizon</div>
+                <div id="statusText" class="status">CALIBRATING...</div>
+            </div>
+            <div class="bottomline">
+                <div id="levelText">LEVEL 1</div>
+                <div id="attemptText">ATTEMPTS 0</div>
+                <div id="hintText">H: HINT OFF</div>
+            </div>
+        </div>
+
+        <div id="centerMessage" class="center-message">Verified Orbit Found</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const app = document.getElementById('app');
+        const statusText = document.getElementById('statusText');
+        const levelText = document.getElementById('levelText');
+        const attemptText = document.getElementById('attemptText');
+        const hintText = document.getElementById('hintText');
+        const centerMessage = document.getElementById('centerMessage');
+
+        const COLORS = {
+            cyan: '#00f2ff',
+            magenta: '#ff00ff',
+            emerald: '#00ff88',
+            white: '#ddf9ff'
+        };
+
+        const G = 1300;
+        const DT = 1 / 60;
+        const MAX_SOLVER_TRIES = 5000;
+        const HIGH_KEY = 'neonOrbiterHighestLevel';
+
+        const state = {
+            width: 0,
+            height: 0,
+            level: 1,
+            highest: Math.max(1, Number(localStorage.getItem(HIGH_KEY) || 1)),
+            attempts: 0,
+            failures: 0,
+            launched: false,
+            lost: false,
+            won: false,
+            generating: true,
+            showHint: false,
+            time: 0,
+            levelStartTime: 0,
+            launchAtTime: 0,
+            pointer: { x: 0, y: 0, down: false, dragging: false },
+            drag: { x: 0, y: 0 },
+            start: { x: 100, y: 100 },
+            goal: { x: 400, y: 300, r: 24 },
+            planets: [],
+            probe: {
+                x: 100,
+                y: 100,
+                vx: 0,
+                vy: 0,
+                r: 6,
+                trail: []
+            },
+            predictedPath: [],
+            ghostVector: null,
+            messageTimeout: null,
+            grainCanvas: null
+        };
+
+        function resize() {
+            state.width = window.innerWidth;
+            state.height = window.innerHeight;
+            canvas.width = state.width;
+            canvas.height = state.height;
+            buildGrain();
+        }
+
+        function buildGrain() {
+            const grain = document.createElement('canvas');
+            grain.width = 220;
+            grain.height = 220;
+            const gctx = grain.getContext('2d');
+            const img = gctx.createImageData(grain.width, grain.height);
+            for (let i = 0; i < img.data.length; i += 4) {
+                const v = 25 + Math.floor(Math.random() * 45);
+                img.data[i] = v;
+                img.data[i + 1] = v;
+                img.data[i + 2] = v + 10;
+                img.data[i + 3] = 34;
+            }
+            gctx.putImageData(img, 0, 0);
+            state.grainCanvas = grain;
+        }
+
+        function rand(min, max) {
+            return min + Math.random() * (max - min);
+        }
+
+        function dist(a, b) {
+            const dx = a.x - b.x;
+            const dy = a.y - b.y;
+            return Math.hypot(dx, dy);
+        }
+
+        function getDifficulty(level) {
+            return {
+                moving: level >= 6,
+                pulsing: level >= 16,
+                blackHole: level >= 30,
+                goalRadius: level <= 5 ? 34 : level <= 15 ? 27 : level <= 30 ? 22 : 18,
+                gravityMult: level <= 5 ? 1.15 : level <= 15 ? 1 : level <= 30 ? 1.05 : 1.2,
+                planetCount: Math.min(8, 3 + Math.floor(level / 4) + Math.floor(rand(0, 2)))
+            };
+        }
+
+        function makePlanetTemplate(diff) {
+            const radius = rand(18, 42);
+            const mass = radius * radius * (0.85 + Math.random() * 0.6) * diff.gravityMult;
+            return {
+                radius,
+                baseMass: mass,
+                isBlackHole: false,
+                moving: false,
+                pulse: false,
+                x: 0,
+                y: 0,
+                anchorX: 0,
+                anchorY: 0,
+                orbitRadius: 0,
+                orbitSpeed: 0,
+                orbitPhase: rand(0, Math.PI * 2),
+                pulseAmp: rand(0.22, 0.42),
+                pulseSpeed: rand(1.4, 2.6),
+                pulsePhase: rand(0, Math.PI * 2)
+            };
+        }
+
+        function getPlanetState(planet, time) {
+            let x = planet.x;
+            let y = planet.y;
+            if (planet.moving) {
+                const angle = planet.orbitPhase + time * planet.orbitSpeed;
+                x = planet.anchorX + Math.cos(angle) * planet.orbitRadius;
+                y = planet.anchorY + Math.sin(angle) * planet.orbitRadius;
+            }
+            const pulse = planet.pulse ? 1 + Math.sin(time * planet.pulseSpeed + planet.pulsePhase) * planet.pulseAmp : 1;
+            return {
+                x,
+                y,
+                radius: planet.radius,
+                mass: planet.baseMass * pulse,
+                isBlackHole: planet.isBlackHole
+            };
+        }
+
+        function generateCandidate(level) {
+            const diff = getDifficulty(level);
+            const side = Math.random() > 0.5 ? 1 : -1;
+            const start = {
+                x: side > 0 ? state.width * 0.13 : state.width * 0.87,
+                y: rand(state.height * 0.25, state.height * 0.75)
+            };
+            const goal = {
+                x: side > 0 ? state.width * 0.87 : state.width * 0.13,
+                y: rand(state.height * 0.2, state.height * 0.8),
+                r: diff.goalRadius
+            };
+
+            const planets = [];
+            let blackHolesLeft = diff.blackHole ? (Math.random() > 0.55 ? 2 : 1) : 0;
+            const pad = 64;
+
+            for (let i = 0; i < diff.planetCount; i += 1) {
+                let tries = 0;
+                let p = makePlanetTemplate(diff);
+                while (tries < 150) {
+                    tries += 1;
+                    p = makePlanetTemplate(diff);
+
+                    const isBH = blackHolesLeft > 0 && Math.random() > 0.5;
+                    if (isBH) {
+                        p.radius = rand(15, 24);
+                        p.baseMass = p.radius * p.radius * 3.4;
+                        p.isBlackHole = true;
+                    }
+
+                    p.moving = diff.moving && Math.random() > 0.4;
+                    p.pulse = diff.pulsing;
+
+                    if (p.moving) {
+                        p.anchorX = rand(state.width * 0.2, state.width * 0.8);
+                        p.anchorY = rand(state.height * 0.18, state.height * 0.82);
+                        p.orbitRadius = rand(24, 90);
+                        p.orbitSpeed = rand(0.45, 1.1) * (Math.random() > 0.5 ? 1 : -1);
+                        p.x = p.anchorX + p.orbitRadius;
+                        p.y = p.anchorY;
+                    } else {
+                        p.x = rand(state.width * 0.14, state.width * 0.86);
+                        p.y = rand(state.height * 0.12, state.height * 0.88);
+                    }
+
+                    const pPos = { x: p.x, y: p.y };
+                    if (dist(pPos, start) < 120 + p.radius || dist(pPos, goal) < 120 + p.radius) {
+                        continue;
+                    }
+
+                    let overlaps = false;
+                    for (const q of planets) {
+                        if (dist(pPos, q) < p.radius + q.radius + pad * 0.2) {
+                            overlaps = true;
+                            break;
+                        }
+                    }
+                    if (!overlaps) {
+                        planets.push(p);
+                        if (p.isBlackHole) blackHolesLeft -= 1;
+                        break;
+                    }
+                }
+            }
+
+            return { start, goal, planets, difficulty: diff };
+        }
+
+        function runSimulation(candidate, launch, maxSteps = 500) {
+            const probe = {
+                x: candidate.start.x,
+                y: candidate.start.y,
+                vx: launch.vx,
+                vy: launch.vy,
+                r: 6
+            };
+            let t = launch.delay;
+
+            for (let step = 0; step < maxSteps; step += 1) {
+                let ax = 0;
+                let ay = 0;
+
+                for (const pl of candidate.planets) {
+                    const p = getPlanetState(pl, t);
+                    const dx = p.x - probe.x;
+                    const dy = p.y - probe.y;
+                    const r2 = dx * dx + dy * dy;
+                    const r = Math.sqrt(r2) || 0.0001;
+
+                    if (r <= p.radius + probe.r) {
+                        return { hit: true, win: false };
+                    }
+
+                    const force = G * (p.mass) / Math.max(r2, 70);
+                    ax += force * (dx / r);
+                    ay += force * (dy / r);
+                }
+
+                probe.vx += ax * DT;
+                probe.vy += ay * DT;
+                probe.x += probe.vx * DT;
+                probe.y += probe.vy * DT;
+                t += DT;
+
+                const dGoal = Math.hypot(probe.x - candidate.goal.x, probe.y - candidate.goal.y);
+                if (dGoal <= candidate.goal.r) {
+                    return { win: true, hit: false, steps: step };
+                }
+
+                if (probe.x < -60 || probe.x > state.width + 60 || probe.y < -60 || probe.y > state.height + 60) {
+                    return { out: true, win: false };
+                }
+            }
+            return { timeout: true, win: false };
+        }
+
+        function validateLevel(candidate) {
+            let found = null;
+            const maxV = 760;
+            const minV = 160;
+            const delayLimit = candidate.difficulty.moving ? 3.2 : 0;
+
+            for (let i = 0; i < MAX_SOLVER_TRIES; i += 1) {
+                const angle = rand(0, Math.PI * 2);
+                const power = rand(minV, maxV);
+                const delay = rand(0, delayLimit);
+                const launch = {
+                    vx: Math.cos(angle) * power,
+                    vy: Math.sin(angle) * power,
+                    angle,
+                    power,
+                    delay
+                };
+                const result = runSimulation(candidate, launch, 520);
+                if (result.win) {
+                    found = launch;
+                    break;
+                }
+            }
+            return found;
+        }
+
+        async function buildVerifiedLevel(level) {
+            state.generating = true;
+            updateHud('SCANNING STELLAR FIELD...');
+
+            let candidate = null;
+            let ghost = null;
+            let attempts = 0;
+
+            while (!ghost) {
+                attempts += 1;
+                candidate = generateCandidate(level);
+                ghost = validateLevel(candidate);
+
+                if (attempts % 5 === 0) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+
+            state.start = candidate.start;
+            state.goal = candidate.goal;
+            state.planets = candidate.planets;
+            state.ghostVector = ghost;
+            state.probe.x = state.start.x;
+            state.probe.y = state.start.y;
+            state.probe.vx = 0;
+            state.probe.vy = 0;
+            state.probe.trail = [];
+            state.time = 0;
+            state.levelStartTime = 0;
+            state.launchAtTime = 0;
+            state.launched = false;
+            state.lost = false;
+            state.won = false;
+            state.failures = 0;
+            state.showHint = false;
+            state.predictedPath = [];
+            state.generating = false;
+
+            showCenterMessage(`Level ${level} Verified`, true, 900);
+            updateHud('VECTOR LOCK READY');
+        }
+
+        function showCenterMessage(text, glitch = false, hideAfter = 1000) {
+            centerMessage.textContent = text;
+            centerMessage.classList.add('show');
+            centerMessage.classList.toggle('glitch', glitch);
+
+            clearTimeout(state.messageTimeout);
+            if (hideAfter > 0) {
+                state.messageTimeout = setTimeout(() => {
+                    centerMessage.classList.remove('show');
+                    centerMessage.classList.remove('glitch');
+                }, hideAfter);
+            }
+        }
+
+        function updateHud(status) {
+            statusText.textContent = status;
+            levelText.textContent = `LEVEL ${state.level}  |  MAX ${state.highest}`;
+            attemptText.textContent = `ATTEMPTS ${state.attempts}`;
+            hintText.textContent = `H: HINT ${state.showHint ? 'ON' : 'OFF'}`;
+        }
+
+        function beginDrag(x, y) {
+            if (state.generating || state.launched || state.won || state.lost) return;
+            const d = Math.hypot(x - state.probe.x, y - state.probe.y);
+            if (d <= 28) {
+                state.pointer.dragging = true;
+                state.drag.x = x;
+                state.drag.y = y;
+            }
+        }
+
+        function dragTo(x, y) {
+            state.pointer.x = x;
+            state.pointer.y = y;
+            if (!state.pointer.dragging) return;
+            state.drag.x = x;
+            state.drag.y = y;
+            updatePrediction();
+        }
+
+        function endDrag() {
+            if (!state.pointer.dragging || state.generating || state.launched || state.won || state.lost) {
+                state.pointer.dragging = false;
+                return;
+            }
+
+            const dx = state.start.x - state.drag.x;
+            const dy = state.start.y - state.drag.y;
+            const pull = Math.min(170, Math.hypot(dx, dy));
+            if (pull < 6) {
+                state.pointer.dragging = false;
+                state.predictedPath = [];
+                return;
+            }
+
+            const scale = 4.9;
+            const vx = (dx / Math.max(1, Math.hypot(dx, dy))) * pull * scale;
+            const vy = (dy / Math.max(1, Math.hypot(dx, dy))) * pull * scale;
+
+            state.probe.x = state.start.x;
+            state.probe.y = state.start.y;
+            state.probe.vx = vx;
+            state.probe.vy = vy;
+            state.probe.trail = [];
+            state.launched = true;
+            state.attempts += 1;
+            state.launchAtTime = state.time;
+            state.pointer.dragging = false;
+            state.predictedPath = [];
+            updateHud('PROBE IN FLIGHT');
+        }
+
+        function updatePrediction() {
+            const dx = state.start.x - state.drag.x;
+            const dy = state.start.y - state.drag.y;
+            const pull = Math.min(170, Math.hypot(dx, dy));
+            if (pull < 5) {
+                state.predictedPath = [];
+                return;
+            }
+
+            const scale = 4.9;
+            const vx = (dx / Math.max(1, Math.hypot(dx, dy))) * pull * scale;
+            const vy = (dy / Math.max(1, Math.hypot(dx, dy))) * pull * scale;
+
+            const probe = { x: state.start.x, y: state.start.y, vx, vy };
+            const points = [];
+            let t = state.time;
+
+            for (let i = 0; i < 90; i += 1) {
+                let ax = 0;
+                let ay = 0;
+                let blocked = false;
+                for (const pl of state.planets) {
+                    const p = getPlanetState(pl, t);
+                    const dxp = p.x - probe.x;
+                    const dyp = p.y - probe.y;
+                    const r2 = dxp * dxp + dyp * dyp;
+                    const r = Math.sqrt(r2) || 0.001;
+                    if (r < p.radius + 5) {
+                        blocked = true;
+                        break;
+                    }
+                    const f = G * p.mass / Math.max(r2, 70);
+                    ax += f * (dxp / r);
+                    ay += f * (dyp / r);
+                }
+                if (blocked) break;
+                probe.vx += ax * DT;
+                probe.vy += ay * DT;
+                probe.x += probe.vx * DT;
+                probe.y += probe.vy * DT;
+                t += DT;
+
+                if (i < 18) points.push({ x: probe.x, y: probe.y });
+                if (probe.x < -40 || probe.x > state.width + 40 || probe.y < -40 || probe.y > state.height + 40) break;
+            }
+            state.predictedPath = points;
+        }
+
+        function triggerLoss(reason) {
+            if (state.lost || state.won) return;
+            state.lost = true;
+            state.launched = false;
+            state.failures += 1;
+            app.classList.add('shake');
+            setTimeout(() => app.classList.remove('shake'), 400);
+            showCenterMessage('Signal Lost', true, 900);
+            updateHud(reason || 'SIGNAL LOST');
+
+            if (state.failures >= 10 && state.ghostVector) {
+                state.showHint = true;
+                updateHud('HINT UNLOCKED');
+            }
+
+            setTimeout(() => {
+                if (state.won) return;
+                resetProbe();
+            }, 700);
+        }
+
+        function triggerWin() {
+            if (state.won) return;
+            state.won = true;
+            state.launched = false;
+            app.classList.add('warp');
+            showCenterMessage('Warp Drive Engaged', true, 900);
+            updateHud('SINGULARITY REACHED');
+
+            if (state.level >= state.highest) {
+                state.highest = state.level + 1;
+                localStorage.setItem(HIGH_KEY, String(state.highest));
+            }
+
+            setTimeout(async () => {
+                app.classList.remove('warp');
+                state.level += 1;
+                await buildVerifiedLevel(state.level);
+                updateHud('VECTOR LOCK READY');
+            }, 820);
+        }
+
+        function resetProbe() {
+            state.probe.x = state.start.x;
+            state.probe.y = state.start.y;
+            state.probe.vx = 0;
+            state.probe.vy = 0;
+            state.probe.trail = [];
+            state.launched = false;
+            state.lost = false;
+            state.predictedPath = [];
+            updateHud(state.showHint ? 'HINT AVAILABLE' : 'RETRY VECTOR');
+        }
+
+        function updateProbe() {
+            if (!state.launched) return;
+
+            let ax = 0;
+            let ay = 0;
+
+            for (const pl of state.planets) {
+                const p = getPlanetState(pl, state.time);
+                const dx = p.x - state.probe.x;
+                const dy = p.y - state.probe.y;
+                const r2 = dx * dx + dy * dy;
+                const r = Math.sqrt(r2) || 0.0001;
+
+                if (r <= p.radius + state.probe.r) {
+                    triggerLoss(p.isBlackHole ? 'EVENT HORIZON BREACH' : 'PLANET IMPACT');
+                    return;
+                }
+
+                const force = G * p.mass / Math.max(r2, 70);
+                ax += force * (dx / r);
+                ay += force * (dy / r);
+            }
+
+            state.probe.vx += ax * DT;
+            state.probe.vy += ay * DT;
+            state.probe.x += state.probe.vx * DT;
+            state.probe.y += state.probe.vy * DT;
+
+            state.probe.trail.push({ x: state.probe.x, y: state.probe.y, life: 1 });
+            if (state.probe.trail.length > 120) state.probe.trail.shift();
+
+            const dGoal = Math.hypot(state.probe.x - state.goal.x, state.probe.y - state.goal.y);
+            if (dGoal <= state.goal.r) {
+                triggerWin();
+                return;
+            }
+
+            if (state.probe.x < -70 || state.probe.x > state.width + 70 || state.probe.y < -70 || state.probe.y > state.height + 70) {
+                triggerLoss('BOUNDARY EXIT');
+            }
+        }
+
+        function drawGlowCircle(x, y, r, color, blur = 18, stroke = true, fillAlpha = 0.08) {
+            ctx.save();
+            ctx.shadowColor = color;
+            ctx.shadowBlur = blur;
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.globalAlpha = fillAlpha;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            if (stroke) {
+                ctx.lineWidth = 1.8;
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function drawPlanets() {
+            for (const pl of state.planets) {
+                const p = getPlanetState(pl, state.time);
+                const col = COLORS.magenta;
+
+                if (pl.pulse) {
+                    const pulseAura = p.radius + 10 + (p.mass / pl.baseMass - 1) * 22;
+                    ctx.save();
+                    ctx.strokeStyle = col;
+                    ctx.globalAlpha = 0.22;
+                    ctx.shadowColor = col;
+                    ctx.shadowBlur = 24;
+                    ctx.setLineDash([5, 9]);
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, Math.max(p.radius + 6, pulseAura), 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                if (pl.isBlackHole) {
+                    drawGlowCircle(p.x, p.y, p.radius + 8, '#9f00ff', 24, false, 0.16);
+                    ctx.save();
+                    ctx.shadowColor = '#5200ff';
+                    ctx.shadowBlur = 28;
+                    ctx.fillStyle = '#000';
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#9f00ff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.restore();
+                } else {
+                    drawGlowCircle(p.x, p.y, p.radius, col, 20, true, 0.09);
+                }
+            }
+        }
+
+        function drawGoal() {
+            drawGlowCircle(state.goal.x, state.goal.y, state.goal.r, COLORS.emerald, 26, true, 0.1);
+            ctx.save();
+            ctx.strokeStyle = COLORS.emerald;
+            ctx.shadowColor = COLORS.emerald;
+            ctx.shadowBlur = 18;
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.arc(state.goal.x, state.goal.y, state.goal.r + 9 + Math.sin(state.time * 2.2) * 3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawProbe() {
+            for (let i = 0; i < state.probe.trail.length; i += 1) {
+                const t = state.probe.trail[i];
+                const alpha = i / state.probe.trail.length;
+                ctx.save();
+                ctx.globalAlpha = alpha * 0.65;
+                ctx.fillStyle = COLORS.cyan;
+                ctx.shadowColor = COLORS.cyan;
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(t.x, t.y, 2.1, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            drawGlowCircle(state.probe.x, state.probe.y, state.probe.r, COLORS.cyan, 22, true, 0.2);
+        }
+
+        function drawAim() {
+            if (!state.pointer.dragging) return;
+
+            const dx = state.start.x - state.drag.x;
+            const dy = state.start.y - state.drag.y;
+            const pull = Math.min(170, Math.hypot(dx, dy));
+
+            ctx.save();
+            ctx.strokeStyle = COLORS.cyan;
+            ctx.shadowColor = COLORS.cyan;
+            ctx.shadowBlur = 16;
+            ctx.lineWidth = 1.2;
+            ctx.setLineDash([6, 7]);
+            ctx.beginPath();
+            ctx.moveTo(state.start.x, state.start.y);
+            ctx.lineTo(state.drag.x, state.drag.y);
+            ctx.stroke();
+            ctx.restore();
+
+            if (pull > 4) {
+                ctx.save();
+                ctx.fillStyle = '#d4ffff';
+                ctx.font = '12px JetBrains Mono';
+                ctx.globalAlpha = 0.9;
+                ctx.fillText(`VECTOR ${Math.round(pull * 4.9)}`, state.drag.x + 10, state.drag.y - 10);
+                ctx.restore();
+            }
+
+            ctx.save();
+            ctx.fillStyle = COLORS.cyan;
+            ctx.shadowColor = COLORS.cyan;
+            ctx.shadowBlur = 14;
+            for (const p of state.predictedPath) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        function drawHint() {
+            if (!state.showHint || state.launched || !state.ghostVector) return;
+
+            const vec = state.ghostVector;
+            const tipX = state.start.x + vec.vx * 0.09;
+            const tipY = state.start.y + vec.vy * 0.09;
+
+            ctx.save();
+            ctx.strokeStyle = 'rgba(0, 255, 136, 0.9)';
+            ctx.shadowColor = COLORS.emerald;
+            ctx.shadowBlur = 14;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 5]);
+            ctx.beginPath();
+            ctx.moveTo(state.start.x, state.start.y);
+            ctx.lineTo(tipX, tipY);
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.save();
+            ctx.fillStyle = COLORS.emerald;
+            ctx.font = '12px JetBrains Mono';
+            const wait = Math.max(0, vec.delay - state.time).toFixed(2);
+            ctx.fillText(`HINT WAIT ${wait}s`, tipX + 8, tipY - 8);
+            ctx.restore();
+        }
+
+        function drawBackground() {
+            ctx.clearRect(0, 0, state.width, state.height);
+
+            const grd = ctx.createRadialGradient(
+                state.width * 0.5,
+                state.height * 0.5,
+                state.height * 0.2,
+                state.width * 0.5,
+                state.height * 0.5,
+                state.height * 0.9
+            );
+            grd.addColorStop(0, 'rgba(8, 14, 30, 0.42)');
+            grd.addColorStop(1, 'rgba(0, 0, 0, 0.7)');
+            ctx.fillStyle = grd;
+            ctx.fillRect(0, 0, state.width, state.height);
+
+            if (state.grainCanvas) {
+                ctx.save();
+                ctx.globalAlpha = 0.18;
+                const pattern = ctx.createPattern(state.grainCanvas, 'repeat');
+                ctx.fillStyle = pattern;
+                ctx.fillRect(0, 0, state.width, state.height);
+                ctx.restore();
+            }
+        }
+
+        function drawFrame() {
+            drawBackground();
+            drawGoal();
+            drawPlanets();
+            drawProbe();
+            drawAim();
+            drawHint();
+        }
+
+        let lastTs = 0;
+        function frame(ts) {
+            if (!lastTs) lastTs = ts;
+            const delta = Math.min(0.033, (ts - lastTs) / 1000);
+            lastTs = ts;
+
+            if (!state.generating) {
+                state.time += delta;
+                updateProbe();
+            }
+
+            drawFrame();
+            requestAnimationFrame(frame);
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            state.pointer.down = true;
+            beginDrag(e.clientX, e.clientY);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            dragTo(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('mouseup', () => {
+            state.pointer.down = false;
+            endDrag();
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            const t = e.touches[0];
+            beginDrag(t.clientX, t.clientY);
+            e.preventDefault();
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            const t = e.touches[0];
+            dragTo(t.clientX, t.clientY);
+            e.preventDefault();
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => {
+            endDrag();
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'h') {
+                if (state.failures >= 10 && state.ghostVector) {
+                    state.showHint = !state.showHint;
+                    updateHud(state.showHint ? 'GHOST VECTOR ONLINE' : 'HINT OFFLINE');
+                }
+            }
+            if (e.key.toLowerCase() === 'r') {
+                resetProbe();
+            }
+        });
+
+        window.addEventListener('resize', resize);
+
+        async function init() {
+            resize();
+            updateHud('CALIBRATING...');
+            await buildVerifiedLevel(state.level);
+            requestAnimationFrame(frame);
+        }
+
+        init();
+    </script>
+</body>
+
+</html>

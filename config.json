@@ -30,6 +30,54 @@
   }
   ,
   {
+    "id": "physics-game",
+    "prompt": "Prompt: Develop \"NEON-ORBITER: Event Horizon\"\n\nConcept Summary\nCreate a single-file HTML5/Canvas/JavaScript game titled Neon-Orbiter. The game is a physics-based orbital slingshot puzzle. Players launch a \"Photon Probe\" from a starting point to a \"Singularity Gate\" (Goal) using the gravitational pull of various stellar bodies.\n\nAesthetic: \"Neon-Minimalist Noir\"\nBackground: Deep midnight blue/black with a subtle, static-filled grain.\n\nVector Style: Everything must be drawn with glowing \"Neon\" strokes (Bloom effect via shadowBlur).\n\nColor Palette: Cyan (#00f2ff) for the probe, Magenta (#ff00ff) for the planets, and Emerald (#00ff88) for the goal.\n\nUI: Use a mono-spaced, high-tech typeface (like 'JetBrains Mono' or 'Share Tech Mono'). Use \"glitch\" animations for level transitions.\n\nThe \"Single Solution\" Mandate (Procedural Generation)\nTo ensure every level is solvable, the generation logic must follow a Reverse-Validation Path:\n\nPlacement: Randomly place the Start and Goal points at opposite ends of the screen.\n\nObstacle Generation: Randomly place 3–8 planets.\n\nThe Solver Simulation:\n\nImmediately after generation (and before the user sees it), run a background loop that simulates 5,000 random launch vectors.\n\nIf a vector successfully reaches the goal, the level is \"Verified\" and presented to the user.\n\nIf no vector reaches the goal, the level is instantly discarded and re-generated until a solution is found.\n\nAdvanced: Store the successful \"Ghost Vector\" and offer it as a \"Hint\" if the user fails 10 times.\n\nDifficulty Scaling (The \"Harder & Harder\" Curve)\nLevel difficulty must be a function of Level Number (L):\n\nL1–5: Static planets, high gravitational range, large Goal radius.\n\nL6–15: Add Orbital Velocity to planets. Planets now move in circular paths, requiring the player to time their launch.\n\nL16–30: Introduce Pulsing Mass. Planets' gravity wells expand and contract over time, shown by a breathing neon aura.\n\nL30+: \"Black Hole\" obstacles that consume the probe (loss condition) but provide immense speed boosts.\n\nCore Mechanics & Physics\nGravitational Law: Implement \nF\n=\nG\n×\n(\nm\n1\n×\nm\n2\n)\n/\nr\n2\nF=G×(m1×m2)/r \n2\n .\n\nLaunch System: A \"Pull-Back\" mechanic (like Angry Birds) where the drag length determines velocity and the angle determines trajectory.\n\nVisual Feedback:\n\nTrajectory Prediction: Show the first 20% of the probe’s path as a faint neon dotted line before launch.\n\nTrail: The probe leaves a decaying neon tail that maps its previous path.\n\nTechnical Requirements\nSingle File: All HTML, CSS (Tailwind allowed via CDN), and JS must be in one .html file.\n\nPerformance: Use requestAnimationFrame for a smooth 60FPS.\n\nState Management: Save the \"Highest Level Reached\" to localStorage.\n\nWin/Loss Conditions\nWin: Probe center enters the Goal radius. Trigger a \"Warp Drive\" animation where the screen stretches.\n\nLoss: Probe hits a planet surface or exits the screen boundaries. Trigger a screen-shake and a \"Signal Lost\" message.",
+    "models": [
+      {
+        "id": "gemini",
+        "name": "gemini-3.1-pro-preview",
+        "path": "./physics-game/gemini/index.html"
+      }
+      ,
+      {
+        "id": "gpt",
+        "name": "gpt-5.3-codex",
+        "path": "./physics-game/gpt/index.html"
+      }
+      ,
+      {
+        "id": "claude",
+        "name": "claude-sonnet-4-6",
+        "path": "./physics-game/claude/index.html"
+      }
+      ,
+      {
+        "id": "qwen",
+        "name": "qwen3.6-max-preview",
+        "path": "./physics-game/qwen/index.html"
+      }
+      ,
+      {
+        "id": "deepseek",
+        "name": "deepseek-v4-pro-thinking",
+        "path": "./physics-game/deepseek/index.html"
+      }
+      ,
+      {
+        "id": "grok",
+        "name": "grok-4.3",
+        "path": "./physics-game/grok/index.html"
+      }
+      ,
+      {
+        "id": "glm",
+        "name": "glm-5.1",
+        "path": "./physics-game/glm/index.html"
+      }
+    ]
+  }
+  ,
+  {
     "id": "flappy",
     "prompt": "Create me a website (game of flappy bird but like modern sleek)",
     "models": [

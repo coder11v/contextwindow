@@ -1,0 +1,2016 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEON-ORBITER: Event Horizon</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --cyan: #00f2ff;
+            --magenta: #ff00ff;
+            --emerald: #00ff88;
+            --bg: #020510;
+            --dim: #0a0f2a;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            overflow: hidden;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--cyan);
+            user-select: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* HUD Overlay */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #hud-top {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 18px 24px;
+            background: linear-gradient(to bottom, rgba(2, 5, 16, 0.9) 0%, transparent 100%);
+        }
+
+        .hud-block {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .hud-label {
+            font-size: 9px;
+            letter-spacing: 3px;
+            color: rgba(0, 242, 255, 0.4);
+            text-transform: uppercase;
+        }
+
+        .hud-value {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--cyan);
+            text-shadow: 0 0 12px var(--cyan), 0 0 24px rgba(0, 242, 255, 0.4);
+        }
+
+        .hud-value.magenta {
+            color: var(--magenta);
+            text-shadow: 0 0 12px var(--magenta), 0 0 24px rgba(255, 0, 255, 0.4);
+        }
+
+        .hud-value.emerald {
+            color: var(--emerald);
+            text-shadow: 0 0 12px var(--emerald), 0 0 24px rgba(0, 255, 136, 0.4);
+        }
+
+        #hud-bottom {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding: 14px 24px;
+            background: linear-gradient(to top, rgba(2, 5, 16, 0.9) 0%, transparent 100%);
+        }
+
+        .hud-tip {
+            font-size: 10px;
+            color: rgba(0, 242, 255, 0.35);
+            letter-spacing: 1px;
+        }
+
+        #hint-btn {
+            pointer-events: all;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--magenta);
+            background: rgba(255, 0, 255, 0.08);
+            border: 1px solid rgba(255, 0, 255, 0.4);
+            padding: 6px 16px;
+            border-radius: 3px;
+            text-transform: uppercase;
+            text-shadow: 0 0 8px var(--magenta);
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.15);
+            transition: all 0.2s;
+            display: none;
+        }
+
+        #hint-btn:hover {
+            background: rgba(255, 0, 255, 0.2);
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.4);
+        }
+
+        #hint-btn.visible {
+            display: block;
+        }
+
+        #progress-bar-wrap {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: rgba(0, 242, 255, 0.05);
+        }
+
+        #progress-bar {
+            height: 100%;
+            background: linear-gradient(to right, var(--cyan), var(--magenta));
+            box-shadow: 0 0 8px var(--cyan);
+            transition: width 0.6s ease;
+        }
+
+        #sector-label {
+            position: absolute;
+            bottom: 52px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            letter-spacing: 4px;
+            color: rgba(0, 242, 255, 0.25);
+            text-transform: uppercase;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        /* Screens */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            background: rgba(2, 5, 16, 0.97);
+            transition: opacity 0.3s;
+        }
+
+        .screen.hidden {
+            display: none;
+        }
+
+        .screen-title {
+            font-size: clamp(28px, 6vw, 64px);
+            font-weight: 800;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            color: var(--cyan);
+            text-shadow: 0 0 20px var(--cyan), 0 0 60px rgba(0, 242, 255, 0.5), 0 0 100px rgba(0, 242, 255, 0.2);
+            margin-bottom: 8px;
+            animation: title-pulse 2.5s ease-in-out infinite;
+        }
+
+        .screen-subtitle {
+            font-size: clamp(10px, 1.5vw, 14px);
+            letter-spacing: 6px;
+            color: var(--magenta);
+            text-shadow: 0 0 10px var(--magenta);
+            margin-bottom: 48px;
+            text-transform: uppercase;
+        }
+
+        .neon-btn {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: clamp(12px, 1.8vw, 16px);
+            font-weight: 700;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: var(--emerald);
+            background: rgba(0, 255, 136, 0.06);
+            border: 1px solid rgba(0, 255, 136, 0.5);
+            padding: 14px 40px;
+            border-radius: 3px;
+            cursor: pointer;
+            text-shadow: 0 0 10px var(--emerald);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.15), inset 0 0 20px rgba(0, 255, 136, 0.04);
+            transition: all 0.2s;
+            margin: 8px;
+        }
+
+        .neon-btn:hover {
+            background: rgba(0, 255, 136, 0.15);
+            box-shadow: 0 0 40px rgba(0, 255, 136, 0.4), inset 0 0 30px rgba(0, 255, 136, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .neon-btn.cyan {
+            color: var(--cyan);
+            background: rgba(0, 242, 255, 0.06);
+            border-color: rgba(0, 242, 255, 0.5);
+            text-shadow: 0 0 10px var(--cyan);
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.15), inset 0 0 20px rgba(0, 242, 255, 0.04);
+        }
+
+        .neon-btn.cyan:hover {
+            background: rgba(0, 242, 255, 0.15);
+            box-shadow: 0 0 40px rgba(0, 242, 255, 0.4);
+        }
+
+        .neon-btn.magenta {
+            color: var(--magenta);
+            background: rgba(255, 0, 255, 0.06);
+            border-color: rgba(255, 0, 255, 0.5);
+            text-shadow: 0 0 10px var(--magenta);
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.15);
+        }
+
+        .neon-btn.magenta:hover {
+            background: rgba(255, 0, 255, 0.15);
+            box-shadow: 0 0 40px rgba(255, 0, 255, 0.4);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin: 32px 0;
+            max-width: 700px;
+            width: 90%;
+        }
+
+        .info-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(0, 242, 255, 0.15);
+            border-radius: 4px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .info-card .icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .info-card .label {
+            font-size: 9px;
+            letter-spacing: 3px;
+            color: rgba(0, 242, 255, 0.5);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .info-card .desc {
+            font-size: 11px;
+            color: rgba(0, 242, 255, 0.75);
+            line-height: 1.5;
+        }
+
+        #win-screen .screen-title {
+            color: var(--emerald);
+            text-shadow: 0 0 20px var(--emerald), 0 0 60px rgba(0, 255, 136, 0.5);
+        }
+
+        #lose-screen .screen-title {
+            color: var(--magenta);
+            text-shadow: 0 0 20px var(--magenta), 0 0 60px rgba(255, 0, 255, 0.5);
+        }
+
+        .status-msg {
+            font-size: clamp(11px, 1.5vw, 14px);
+            color: rgba(0, 242, 255, 0.6);
+            margin-bottom: 24px;
+            letter-spacing: 2px;
+        }
+
+        #loading-screen {
+            z-index: 200;
+        }
+
+        #loading-bar-wrap {
+            width: 300px;
+            height: 3px;
+            background: rgba(0, 242, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 24px 0 8px;
+        }
+
+        #loading-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--cyan);
+            box-shadow: 0 0 10px var(--cyan);
+            transition: width 0.1s linear;
+        }
+
+        #loading-text {
+            font-size: 11px;
+            color: rgba(0, 242, 255, 0.5);
+            letter-spacing: 3px;
+        }
+
+        /* Glitch keyframes */
+        @keyframes glitch {
+
+            0%,
+            100% {
+                clip-path: none;
+                transform: none;
+            }
+
+            20% {
+                clip-path: inset(10% 0 80% 0);
+                transform: translate(-3px, 0);
+            }
+
+            40% {
+                clip-path: inset(60% 0 20% 0);
+                transform: translate(3px, 0);
+            }
+
+            60% {
+                clip-path: inset(30% 0 50% 0);
+                transform: translate(-2px, 0);
+            }
+
+            80% {
+                clip-path: none;
+                transform: translate(1px, 0);
+            }
+        }
+
+        @keyframes title-pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.85;
+            }
+        }
+
+        @keyframes scanline {
+            0% {
+                transform: translateY(-100%);
+            }
+
+            100% {
+                transform: translateY(100vh);
+            }
+        }
+
+        .scanline {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(transparent, rgba(0, 242, 255, 0.04), transparent);
+            pointer-events: none;
+            animation: scanline 4s linear infinite;
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translate(0, 0) rotate(0);
+            }
+
+            10% {
+                transform: translate(-8px, 6px) rotate(-0.5deg);
+            }
+
+            20% {
+                transform: translate(8px, -6px) rotate(0.5deg);
+            }
+
+            30% {
+                transform: translate(-10px, -4px) rotate(-0.3deg);
+            }
+
+            40% {
+                transform: translate(10px, 4px) rotate(0.3deg);
+            }
+
+            50% {
+                transform: translate(-6px, 8px) rotate(-0.2deg);
+            }
+
+            60% {
+                transform: translate(6px, -8px) rotate(0.2deg);
+            }
+
+            70% {
+                transform: translate(-4px, -6px) rotate(0);
+            }
+
+            80% {
+                transform: translate(4px, 6px) rotate(0);
+            }
+
+            90% {
+                transform: translate(-2px, -2px) rotate(0);
+            }
+        }
+
+        .shaking {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes warp {
+            0% {
+                transform: scaleX(1) scaleY(1);
+                filter: brightness(1) hue-rotate(0deg);
+            }
+
+            30% {
+                transform: scaleX(0.05) scaleY(3);
+                filter: brightness(4) hue-rotate(180deg);
+            }
+
+            60% {
+                transform: scaleX(4) scaleY(0.02);
+                filter: brightness(6) hue-rotate(360deg);
+            }
+
+            100% {
+                transform: scaleX(1) scaleY(1);
+                filter: brightness(1);
+                opacity: 0;
+            }
+        }
+
+        .warping {
+            animation: warp 0.7s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+        }
+
+        @keyframes glitch-in {
+            0% {
+                opacity: 0;
+                clip-path: inset(100% 0 0 0);
+                filter: hue-rotate(90deg) brightness(3);
+            }
+
+            25% {
+                clip-path: inset(0 0 80% 0);
+            }
+
+            50% {
+                clip-path: inset(40% 0 40% 0);
+            }
+
+            75% {
+                clip-path: inset(10% 0 10% 0);
+                filter: hue-rotate(0deg) brightness(1);
+            }
+
+            100% {
+                opacity: 1;
+                clip-path: none;
+            }
+        }
+
+        .glitch-in {
+            animation: glitch-in 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+        }
+
+        #difficulty-badge {
+            position: absolute;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(0, 242, 255, 0.5);
+            white-space: nowrap;
+        }
+
+        #combo-flash {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: clamp(24px, 4vw, 40px);
+            font-weight: 800;
+            color: var(--emerald);
+            text-shadow: 0 0 30px var(--emerald);
+            pointer-events: none;
+            opacity: 0;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            transition: none;
+        }
+
+        .best-record {
+            font-size: 11px;
+            color: rgba(0, 242, 255, 0.4);
+            letter-spacing: 2px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Scanline overlay -->
+    <div class="scanline"></div>
+
+    <!-- Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD -->
+    <div id="hud" class="hidden">
+        <div id="hud-top">
+            <div class="hud-block">
+                <div class="hud-label">Level</div>
+                <div class="hud-value" id="hud-level">01</div>
+            </div>
+            <div class="hud-block" style="text-align:center">
+                <div class="hud-label">Difficulty</div>
+                <div class="hud-value magenta" id="hud-diff">NOVICE</div>
+            </div>
+            <div class="hud-block" style="text-align:right">
+                <div class="hud-label">Attempts</div>
+                <div class="hud-value cyan" id="hud-attempts">0</div>
+            </div>
+        </div>
+        <div id="difficulty-badge" id="diff-badge"></div>
+        <div id="combo-flash"></div>
+        <div id="hud-bottom">
+            <div class="hud-tip" id="hud-tip">DRAG FROM PROBE TO AIM · RELEASE TO LAUNCH</div>
+            <button id="hint-btn" class="neon-btn magenta" onclick="game.showHint()">⚡ HINT</button>
+        </div>
+        <div id="sector-label" id="sector-lbl">SECTOR ALPHA · DEEP SPACE REGION 01</div>
+        <div id="progress-bar-wrap">
+            <div id="progress-bar" style="width:3%"></div>
+        </div>
+    </div>
+
+    <!-- Title Screen -->
+    <div id="title-screen" class="screen">
+        <div class="screen-title">NEON-ORBITER</div>
+        <div class="screen-subtitle">// Event Horizon //</div>
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="icon">🌌</div>
+                <div class="label">Physics</div>
+                <div class="desc">Real gravitational slingshot mechanics</div>
+            </div>
+            <div class="info-card">
+                <div class="icon">⚡</div>
+                <div class="label">Challenge</div>
+                <div class="desc">Every level verified solvable</div>
+            </div>
+            <div class="info-card">
+                <div class="icon">🌀</div>
+                <div class="label">Escalation</div>
+                <div class="desc">30+ levels of increasing chaos</div>
+            </div>
+        </div>
+        <button class="neon-btn" onclick="game.startGame()">▶ INITIALIZE PROBE</button>
+        <div id="title-record" class="best-record">BEST LEVEL: —</div>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="screen hidden">
+        <div class="screen-title" style="font-size:clamp(16px,3vw,28px);margin-bottom:6px;">COMPUTING TRAJECTORY</div>
+        <div class="screen-subtitle" style="margin-bottom:16px;font-size:10px;">RUNNING SOLVER SIMULATION</div>
+        <div id="loading-bar-wrap">
+            <div id="loading-bar"></div>
+        </div>
+        <div id="loading-text">SCANNING VECTORS...</div>
+    </div>
+
+    <!-- Win Screen -->
+    <div id="win-screen" class="screen hidden">
+        <div class="screen-title">WARP SUCCESS</div>
+        <div class="screen-subtitle">// SINGULARITY BRIDGED //</div>
+        <div class="status-msg" id="win-msg">LEVEL 1 COMPLETE</div>
+        <button class="neon-btn" onclick="game.nextLevel()">▶ NEXT SECTOR</button>
+        <button class="neon-btn cyan" onclick="game.replayLevel()" style="font-size:11px;padding:10px 28px;">↺
+            REPLAY</button>
+    </div>
+
+    <!-- Lose Screen -->
+    <div id="lose-screen" class="screen hidden">
+        <div class="screen-title">SIGNAL LOST</div>
+        <div class="screen-subtitle">// PROBE DESTROYED //</div>
+        <div class="status-msg" id="lose-msg">GRAVITATIONAL COLLAPSE DETECTED</div>
+        <button class="neon-btn" onclick="game.replayLevel()">↺ RETRY</button>
+        <button class="neon-btn cyan" onclick="game.backToTitle()" style="font-size:11px;padding:10px 28px;">⌂
+            MENU</button>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════
+        //  NEON-ORBITER: Event Horizon — Core Engine
+        // ═══════════════════════════════════════════════════════════
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // ─── Resize ──────────────────────────────────────────────
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resize();
+        window.addEventListener('resize', () => { resize(); if (game) game.onResize(); });
+
+        // ─── Utility ─────────────────────────────────────────────
+        const lerp = (a, b, t) => a + (b - a) * t;
+        const clamp = (v, mn, mx) => Math.max(mn, Math.min(mx, v));
+        const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+        const rand = (min, max) => Math.random() * (max - min) + min;
+        const randInt = (min, max) => Math.floor(rand(min, max + 1));
+
+        // ─── Colors ──────────────────────────────────────────────
+        const C = {
+            cyan: '#00f2ff',
+            magenta: '#ff00ff',
+            emerald: '#00ff88',
+            yellow: '#ffee00',
+            red: '#ff2244',
+            bg: '#020510',
+        };
+
+        // ─── Grain / Noise Texture ────────────────────────────────
+        let grainCanvas, grainCtx;
+        function buildGrain() {
+            grainCanvas = document.createElement('canvas');
+            grainCanvas.width = 256; grainCanvas.height = 256;
+            grainCtx = grainCanvas.getContext('2d');
+            const img = grainCtx.createImageData(256, 256);
+            for (let i = 0; i < img.data.length; i += 4) {
+                const v = Math.random() * 30;
+                img.data[i] = v; img.data[i + 1] = v; img.data[i + 2] = v + 10;
+                img.data[i + 3] = Math.random() * 40;
+            }
+            grainCtx.putImageData(img, 0, 0);
+        }
+        buildGrain();
+
+        // ─── Star Field ──────────────────────────────────────────
+        class StarField {
+            constructor(count = 200) {
+                this.stars = [];
+                for (let i = 0; i < count; i++) {
+                    this.stars.push({
+                        x: Math.random(), y: Math.random(),
+                        r: rand(0.3, 1.4),
+                        a: rand(0.2, 0.8),
+                        twinkle: rand(0, Math.PI * 2),
+                        speed: rand(0.005, 0.02)
+                    });
+                }
+            }
+            draw(W, H, t) {
+                for (const s of this.stars) {
+                    s.twinkle += s.speed;
+                    const alpha = s.a * (0.6 + 0.4 * Math.sin(s.twinkle));
+                    ctx.beginPath();
+                    ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(200,220,255,${alpha})`;
+                    ctx.fill();
+                }
+            }
+        }
+
+        // ─── Physics Constants ────────────────────────────────────
+        const G_CONST = 2800;
+        const MAX_TRAIL = 180;
+        const PREDICTION_STEPS = 220;
+        const DT = 1 / 60;
+        const MAX_VEL = 1100;
+        const BH_BOOST_RANGE = 65;    // black hole speed boost radius (before surface)
+        const BH_BOOST_FACTOR = 2.8;  // velocity multiplier on slingshot exit
+
+        // ─── Planet Types ─────────────────────────────────────────
+        const PLANET_TYPES = {
+            normal: { color: C.magenta, massRange: [60, 130], radiusRange: [16, 32] },
+            giant: { color: '#aa44ff', massRange: [150, 260], radiusRange: [36, 56] },
+            dwarf: { color: '#ff8844', massRange: [25, 55], radiusRange: [8, 14] },
+            blackhole: { color: '#220033', massRange: [400, 700], radiusRange: [18, 30], isBlackhole: true },
+        };
+
+        // ─── Planet Class ─────────────────────────────────────────
+        class Planet {
+            constructor(x, y, type, level, orbitCenter = null, orbitRadius = 0, orbitSpeed = 0, pulsing = false) {
+                this.baseX = x; this.baseY = y;
+                this.x = x; this.y = y;
+                this.type = type;
+                const def = PLANET_TYPES[type] || PLANET_TYPES.normal;
+                this.color = def.color;
+                this.mass = rand(...def.massRange);
+                this.radius = rand(...def.radiusRange);
+                this.isBlackhole = !!def.isBlackhole;
+                // Orbital motion
+                this.orbitCenter = orbitCenter;
+                this.orbitRadius = orbitRadius;
+                this.orbitAngle = rand(0, Math.PI * 2);
+                this.orbitSpeed = orbitSpeed;
+                // Pulsing mass
+                this.pulsing = pulsing;
+                this.baseMass = this.mass;
+                this.pulsePhase = rand(0, Math.PI * 2);
+                this.pulseFreq = rand(0.6, 1.4);
+                this.pulseAmp = rand(0.25, 0.6);
+                // Grav range
+                this.gravRange = rand(120, 240) * (level <= 5 ? 1.5 : 1.0);
+                // Visual
+                this.ringAngle = rand(0, Math.PI * 2);
+                this.glowPhase = rand(0, Math.PI * 2);
+                this.haloParticles = Array.from({ length: 6 }, () => ({
+                    angle: rand(0, Math.PI * 2), dist: rand(this.radius + 4, this.radius + 18),
+                    speed: rand(0.02, 0.08) * (Math.random() < 0.5 ? 1 : -1)
+                }));
+            }
+
+            update(t) {
+                if (this.orbitCenter) {
+                    this.orbitAngle += this.orbitSpeed * DT;
+                    this.x = this.orbitCenter.x + Math.cos(this.orbitAngle) * this.orbitRadius;
+                    this.y = this.orbitCenter.y + Math.sin(this.orbitAngle) * this.orbitRadius;
+                }
+                if (this.pulsing) {
+                    this.pulsePhase += this.pulseFreq * DT;
+                    const factor = 1 + this.pulseAmp * Math.sin(this.pulsePhase);
+                    this.mass = this.baseMass * factor;
+                }
+                this.glowPhase += 0.03;
+                for (const p of this.haloParticles) p.angle += p.speed;
+            }
+
+            getGravity(px, py) {
+                const dx = this.x - px, dy = this.y - py;
+                const r2 = dx * dx + dy * dy;
+                const r = Math.sqrt(r2);
+                if (r > this.gravRange * 2) return { fx: 0, fy: 0 };
+                const F = G_CONST * this.mass / Math.max(r2, 50);
+                return { fx: F * dx / r, fy: F * dy / r };
+            }
+
+            draw(t, showGravRange) {
+                const x = this.x, y = this.y, R = this.radius;
+                const glowPulse = 0.85 + 0.15 * Math.sin(this.glowPhase);
+
+                if (this.isBlackhole) {
+                    // Accretion disk rings
+                    for (let i = 3; i >= 1; i--) {
+                        ctx.save();
+                        ctx.translate(x, y);
+                        ctx.rotate(t * 0.5 * i);
+                        ctx.beginPath();
+                        ctx.ellipse(0, 0, R * (1.5 + i * 0.4), R * (0.3 + i * 0.1), 0, 0, Math.PI * 2);
+                        ctx.strokeStyle = `rgba(170,0,255,${0.15 * i})`;
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                    // Core void
+                    const grad = ctx.createRadialGradient(x, y, 0, x, y, R * 2.5);
+                    grad.addColorStop(0, 'rgba(0,0,0,1)');
+                    grad.addColorStop(0.5, 'rgba(20,0,40,0.8)');
+                    grad.addColorStop(1, 'rgba(80,0,160,0)');
+                    ctx.beginPath();
+                    ctx.arc(x, y, R * 2.5, 0, Math.PI * 2);
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+                    // Core stroke
+                    ctx.beginPath();
+                    ctx.arc(x, y, R, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#6600cc';
+                    ctx.lineWidth = 2;
+                    ctx.shadowColor = '#aa00ff';
+                    ctx.shadowBlur = 20;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    // Label
+                    ctx.fillStyle = 'rgba(170,0,255,0.7)';
+                    ctx.font = `bold ${Math.max(8, R * 0.45)}px JetBrains Mono`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('⚫', x, y);
+                } else {
+                    // Normal planet
+                    // Grav range indicator
+                    if (showGravRange) {
+                        const gr = ctx.createRadialGradient(x, y, R, x, y, this.gravRange * 2);
+                        gr.addColorStop(0, `rgba(${hexToRgb(this.color)},0.07)`);
+                        gr.addColorStop(1, 'rgba(0,0,0,0)');
+                        ctx.beginPath();
+                        ctx.arc(x, y, this.gravRange * 2, 0, Math.PI * 2);
+                        ctx.fillStyle = gr;
+                        ctx.fill();
+                    }
+
+                    // Pulse aura (L16+)
+                    if (this.pulsing) {
+                        const pf = this.mass / this.baseMass;
+                        ctx.beginPath();
+                        ctx.arc(x, y, R * (1.5 + pf * 0.8), 0, Math.PI * 2);
+                        ctx.strokeStyle = `rgba(${hexToRgb(this.color)},${0.12 * pf})`;
+                        ctx.lineWidth = 6 * pf;
+                        ctx.shadowColor = this.color;
+                        ctx.shadowBlur = 20 * pf;
+                        ctx.stroke();
+                        ctx.shadowBlur = 0;
+                    }
+
+                    // Halo particles
+                    for (const p of this.haloParticles) {
+                        const px2 = x + Math.cos(p.angle) * p.dist;
+                        const py2 = y + Math.sin(p.angle) * p.dist;
+                        ctx.beginPath();
+                        ctx.arc(px2, py2, 1.2, 0, Math.PI * 2);
+                        ctx.fillStyle = this.color;
+                        ctx.shadowColor = this.color;
+                        ctx.shadowBlur = 6;
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                    }
+
+                    // Outer glow
+                    const outerGrad = ctx.createRadialGradient(x, y, R * 0.5, x, y, R * 2.5);
+                    outerGrad.addColorStop(0, `rgba(${hexToRgb(this.color)},${0.25 * glowPulse})`);
+                    outerGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.beginPath();
+                    ctx.arc(x, y, R * 2.5, 0, Math.PI * 2);
+                    ctx.fillStyle = outerGrad;
+                    ctx.fill();
+
+                    // Planet body
+                    const grad = ctx.createRadialGradient(x - R * 0.3, y - R * 0.3, R * 0.1, x, y, R);
+                    grad.addColorStop(0, `rgba(${hexToRgb(this.color)},0.9)`);
+                    grad.addColorStop(0.6, `rgba(${hexToRgb(this.color)},0.5)`);
+                    grad.addColorStop(1, `rgba(${hexToRgb(this.color)},0.1)`);
+                    ctx.beginPath();
+                    ctx.arc(x, y, R, 0, Math.PI * 2);
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+                    ctx.strokeStyle = this.color;
+                    ctx.lineWidth = 1.5;
+                    ctx.shadowColor = this.color;
+                    ctx.shadowBlur = 18 * glowPulse;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+
+                    // Orbit ring decoration
+                    ctx.save();
+                    ctx.translate(x, y);
+                    ctx.rotate(this.ringAngle + t * 0.3);
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, R * 1.7, R * 0.5, 0, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(${hexToRgb(this.color)},0.18)`;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+
+            drawOrbitPath() {
+                if (!this.orbitCenter) return;
+                ctx.beginPath();
+                ctx.arc(this.orbitCenter.x, this.orbitCenter.y, this.orbitRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(${hexToRgb(this.color)},0.08)`;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 8]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+
+        // ─── Helper: hex to rgb ──────────────────────────────────
+        function hexToRgb(hex) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `${r},${g},${b}`;
+        }
+
+        // ─── Probe Class ──────────────────────────────────────────
+        class Probe {
+            constructor(x, y) {
+                this.x = x; this.y = y;
+                this.vx = 0; this.vy = 0;
+                this.trail = [];
+                this.alive = true;
+                this.launched = false;
+                this.glowPhase = 0;
+                this.sparkles = [];
+            }
+
+            launch(vx, vy) {
+                this.vx = vx; this.vy = vy;
+                this.launched = true;
+                // Spawn launch burst sparkles
+                for (let i = 0; i < 12; i++) {
+                    const angle = rand(0, Math.PI * 2);
+                    this.sparkles.push({ x: this.x, y: this.y, vx: Math.cos(angle) * rand(40, 120), vy: Math.sin(angle) * rand(40, 120), life: 1 });
+                }
+            }
+
+            update(planets) {
+                if (!this.launched || !this.alive) return;
+                // Store trail
+                this.trail.push({ x: this.x, y: this.y, t: 1.0 });
+                if (this.trail.length > MAX_TRAIL) this.trail.shift();
+                // Decay trail
+                for (const p of this.trail) p.t *= 0.97;
+                // Gravity
+                let ax = 0, ay = 0;
+                for (const pl of planets) {
+                    const g = pl.getGravity(this.x, this.y);
+                    ax += g.fx; ay += g.fy;
+                }
+                this.vx += ax * DT;
+                this.vy += ay * DT;
+                // Speed cap
+                const spd = Math.hypot(this.vx, this.vy);
+                if (spd > MAX_VEL) { this.vx = this.vx / spd * MAX_VEL; this.vy = this.vy / spd * MAX_VEL; }
+                this.x += this.vx * DT;
+                this.y += this.vy * DT;
+                this.glowPhase += 0.15;
+                // Update sparkles
+                this.sparkles = this.sparkles.filter(s => s.life > 0.01);
+                for (const s of this.sparkles) {
+                    s.x += s.vx * DT; s.y += s.vy * DT;
+                    s.vx *= 0.92; s.vy *= 0.92;
+                    s.life *= 0.88;
+                }
+            }
+
+            isOutOfBounds(W, H) {
+                const pad = 60;
+                return this.x < -pad || this.x > W + pad || this.y < -pad || this.y > H + pad;
+            }
+
+            draw() {
+                // Sparkles
+                for (const s of this.sparkles) {
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, 2 * s.life, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(0,242,255,${s.life})`;
+                    ctx.shadowColor = C.cyan; ctx.shadowBlur = 8;
+                    ctx.fill(); ctx.shadowBlur = 0;
+                }
+                // Trail
+                for (let i = 0; i < this.trail.length; i++) {
+                    const p = this.trail[i];
+                    const ratio = i / this.trail.length;
+                    const alpha = p.t * ratio * 0.7;
+                    const r = ratio * 3.5;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, Math.max(0.3, r), 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(0,242,255,${alpha})`;
+                    ctx.shadowColor = C.cyan; ctx.shadowBlur = r * 3;
+                    ctx.fill(); ctx.shadowBlur = 0;
+                }
+                if (!this.alive) return;
+                // Probe body
+                const g = 0.75 + 0.25 * Math.sin(this.glowPhase);
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 7, 0, Math.PI * 2);
+                ctx.fillStyle = C.cyan;
+                ctx.shadowColor = C.cyan;
+                ctx.shadowBlur = 22 * g;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                // Core dot
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 2.5, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                // Outer ring
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 12, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(0,242,255,${0.25 * g})`;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+        }
+
+        // ─── Goal (Singularity Gate) ──────────────────────────────
+        class Goal {
+            constructor(x, y, radius) {
+                this.x = x; this.y = y;
+                this.radius = radius;
+                this.phase = 0;
+                this.rings = Array.from({ length: 4 }, (_, i) => ({ angle: i * Math.PI / 2, speed: rand(0.02, 0.05) * (i % 2 === 0 ? 1 : -1) }));
+                this.particles = Array.from({ length: 16 }, (_, i) => ({
+                    angle: (i / 16) * Math.PI * 2, dist: rand(radius + 8, radius + 28),
+                    speed: rand(0.04, 0.09), life: rand(0, 1)
+                }));
+            }
+
+            update() {
+                this.phase += 0.05;
+                for (const r of this.rings) r.angle += r.speed;
+                for (const p of this.particles) {
+                    p.angle += p.speed;
+                    p.life -= 0.015;
+                    if (p.life <= 0) { p.life = 1; p.dist = rand(this.radius + 4, this.radius + 30); }
+                }
+            }
+
+            contains(px, py) {
+                return dist({ x: px, y: py }, this) < this.radius;
+            }
+
+            draw() {
+                const x = this.x, y = this.y, R = this.radius;
+                const glow = 0.8 + 0.2 * Math.sin(this.phase);
+
+                // Outer aura
+                const aura = ctx.createRadialGradient(x, y, R * 0.5, x, y, R * 3.5);
+                aura.addColorStop(0, `rgba(0,255,136,${0.12 * glow})`);
+                aura.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.beginPath();
+                ctx.arc(x, y, R * 3.5, 0, Math.PI * 2);
+                ctx.fillStyle = aura;
+                ctx.fill();
+
+                // Orbit particles
+                for (const p of this.particles) {
+                    const px2 = x + Math.cos(p.angle) * p.dist;
+                    const py2 = y + Math.sin(p.angle) * p.dist;
+                    ctx.beginPath();
+                    ctx.arc(px2, py2, 1.5 * p.life, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(0,255,136,${p.life * 0.8})`;
+                    ctx.shadowColor = C.emerald; ctx.shadowBlur = 6;
+                    ctx.fill(); ctx.shadowBlur = 0;
+                }
+
+                // Spinning rings
+                for (let i = 0; i < this.rings.length; i++) {
+                    const r2 = this.rings[i];
+                    ctx.save();
+                    ctx.translate(x, y);
+                    ctx.rotate(r2.angle);
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, R * (1.3 + i * 0.15), R * (0.35 + i * 0.08), 0, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(0,255,136,${(0.4 - i * 0.08) * glow})`;
+                    ctx.lineWidth = 1.5;
+                    ctx.shadowColor = C.emerald;
+                    ctx.shadowBlur = 12;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
+                }
+
+                // Core gate
+                const grad = ctx.createRadialGradient(x, y, 0, x, y, R);
+                grad.addColorStop(0, `rgba(0,255,136,${0.6 * glow})`);
+                grad.addColorStop(0.5, `rgba(0,255,136,0.2)`);
+                grad.addColorStop(1, 'rgba(0,255,136,0)');
+                ctx.beginPath();
+                ctx.arc(x, y, R, 0, Math.PI * 2);
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(x, y, R, 0, Math.PI * 2);
+                ctx.strokeStyle = C.emerald;
+                ctx.lineWidth = 2;
+                ctx.shadowColor = C.emerald;
+                ctx.shadowBlur = 20 * glow;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // Label
+                ctx.fillStyle = `rgba(0,255,136,${0.9 * glow})`;
+                ctx.font = 'bold 9px JetBrains Mono';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('GATE', x, y + R + 14);
+            }
+        }
+
+        // ─── Start Point ──────────────────────────────────────────
+        class StartPoint {
+            constructor(x, y) { this.x = x; this.y = y; this.phase = 0; }
+            update() { this.phase += 0.04; }
+            draw(probeHere) {
+                const x = this.x, y = this.y;
+                const g = 0.7 + 0.3 * Math.sin(this.phase);
+                ctx.beginPath();
+                ctx.arc(x, y, 18, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(0,242,255,${0.2 * g})`;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(x, y, 10, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(0,242,255,${0.5 * g})`;
+                ctx.lineWidth = 1.5;
+                ctx.shadowColor = C.cyan; ctx.shadowBlur = 10;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+                if (probeHere) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, 7, 0, Math.PI * 2);
+                    ctx.fillStyle = C.cyan;
+                    ctx.shadowColor = C.cyan; ctx.shadowBlur = 20;
+                    ctx.fill(); ctx.shadowBlur = 0;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ffffff'; ctx.fill();
+                }
+                ctx.fillStyle = `rgba(0,242,255,${0.6 * g})`;
+                ctx.font = '9px JetBrains Mono';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('LAUNCH', x, y + 26);
+            }
+        }
+
+        // ─── Level Generator + Solver ─────────────────────────────
+        function generateLevel(levelNum) {
+            const W = canvas.width, H = canvas.height;
+            const pad = 100;
+            const margin = { x: pad, y: pad };
+
+            // Difficulty flags
+            const hasOrbital = levelNum >= 6;
+            const hasPulsing = levelNum >= 16;
+            const hasBlackhole = levelNum >= 30;
+            const goalR = Math.max(20, 55 - levelNum * 1.1);
+            const gravMult = levelNum <= 5 ? 1.6 : 1.0;
+            const numPlanets = clamp(3 + Math.floor(levelNum / 2.5), 3, 8);
+
+            // Place start and goal at opposite sides
+            const side = Math.random() < 0.5;
+            let startX, startY, goalX, goalY;
+            if (side) {
+                startX = margin.x + rand(0, W * 0.15);
+                startY = rand(margin.y, H - margin.y);
+                goalX = W - margin.x - rand(0, W * 0.15);
+                goalY = rand(margin.y, H - margin.y);
+            } else {
+                startX = rand(margin.x, W - margin.x);
+                startY = margin.y + rand(0, H * 0.15);
+                goalX = rand(margin.x, W - margin.x);
+                goalY = H - margin.y - rand(0, H * 0.15);
+            }
+
+            const startPt = { x: startX, y: startY };
+            const goalPt = { x: goalX, y: goalY, radius: goalR };
+            const planets = [];
+
+            // Safe zone around start and goal
+            const MIN_DIST_FROM_ENDPOINTS = 90;
+
+            for (let i = 0; i < numPlanets; i++) {
+                let attempts = 0, placed = false;
+                while (attempts < 80 && !placed) {
+                    attempts++;
+                    const px = rand(margin.x, W - margin.x);
+                    const py = rand(margin.y, H - margin.y);
+                    if (dist({ x: px, y: py }, startPt) < MIN_DIST_FROM_ENDPOINTS) continue;
+                    if (dist({ x: px, y: py }, goalPt) < MIN_DIST_FROM_ENDPOINTS) continue;
+                    // Check not overlapping other planets
+                    let overlap = false;
+                    for (const p of planets) { if (dist({ x: px, y: py }, p) < 80) { overlap = true; break; } }
+                    if (overlap) continue;
+
+                    // Choose type
+                    let type = 'normal';
+                    if (hasBlackhole && Math.random() < 0.18) type = 'blackhole';
+                    else if (Math.random() < 0.22) type = 'giant';
+                    else if (Math.random() < 0.2) type = 'dwarf';
+
+                    let orbitCenter = null, orbitRadius = 0, orbitSpeed = 0;
+                    if (hasOrbital && Math.random() < 0.6) {
+                        orbitCenter = { x: W / 2 + rand(-W * 0.2, W * 0.2), y: H / 2 + rand(-H * 0.2, H * 0.2) };
+                        orbitRadius = rand(60, 150);
+                        orbitSpeed = rand(0.4, 1.0) * (Math.random() < 0.5 ? 1 : -1);
+                    }
+                    const pulsing = hasPulsing && Math.random() < 0.55;
+                    const pl = new Planet(px, py, type, levelNum, orbitCenter, orbitRadius, orbitSpeed, pulsing);
+                    pl.gravRange *= gravMult;
+                    planets.push(pl);
+                    placed = true;
+                }
+            }
+
+            return { startPt, goalPt: { x: goalX, y: goalY, radius: goalR }, planets };
+        }
+
+        // ─── Physics Simulation (headless) ───────────────────────
+        function simulateShot(sx, sy, vx, vy, planets, goalX, goalY, goalR, W, H, maxSteps = 600) {
+            let x = sx, y = sy;
+            let dvx = vx, dvy = vy;
+            const pad = 80;
+            for (let i = 0; i < maxSteps; i++) {
+                let ax = 0, ay = 0;
+                for (const pl of planets) {
+                    const dx = pl.x - x, dy = pl.y - y;
+                    const r2 = dx * dx + dy * dy;
+                    const r = Math.sqrt(r2);
+                    // Collision with planet
+                    if (r < pl.radius) return 'hit';
+                    if (r > pl.gravRange * 2) continue;
+                    const F = G_CONST * pl.mass / Math.max(r2, 50);
+                    ax += F * dx / r; ay += F * dy / r;
+                }
+                dvx += ax * DT; dvy += ay * DT;
+                const spd = Math.hypot(dvx, dvy);
+                if (spd > MAX_VEL) { dvx = dvx / spd * MAX_VEL; dvy = dvy / spd * MAX_VEL; }
+                x += dvx * DT; y += dvy * DT;
+                // Check OOB
+                if (x < -pad || x > W + pad || y < -pad || y > H + pad) return 'oob';
+                // Check goal
+                if (Math.hypot(x - goalX, y - goalY) < goalR) return 'win';
+            }
+            return 'timeout';
+        }
+
+        // ─── Solver ───────────────────────────────────────────────
+        function solveLevel(levelData, W, H, iterations = 5000) {
+            const { startPt, goalPt, planets } = levelData;
+            const { x: gx, y: gy, radius: gr } = goalPt;
+
+            // Speed ranges based on level
+            const minSpeed = 60, maxSpeed = 650;
+            let bestVec = null;
+
+            // Bias: aim toward goal with spread
+            const aimAngle = Math.atan2(gy - startPt.y, gx - startPt.x);
+
+            for (let i = 0; i < iterations; i++) {
+                let angle, speed;
+                if (i < iterations * 0.35) {
+                    // Biased toward goal direction
+                    angle = aimAngle + rand(-Math.PI * 0.6, Math.PI * 0.6);
+                    speed = rand(minSpeed, maxSpeed * 0.75);
+                } else if (i < iterations * 0.65) {
+                    // Wide spread
+                    angle = rand(0, Math.PI * 2);
+                    speed = rand(minSpeed, maxSpeed);
+                } else {
+                    // Fine-tune near good angles if we found something
+                    angle = aimAngle + rand(-Math.PI, Math.PI);
+                    speed = rand(minSpeed * 0.5, maxSpeed);
+                }
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed;
+                // Snapshot planet positions for headless sim
+                const snapPlanets = planets.map(p => ({ x: p.x, y: p.y, mass: p.mass, radius: p.radius, gravRange: p.gravRange }));
+                const result = simulateShot(startPt.x, startPt.y, vx, vy, snapPlanets, gx, gy, gr, W, H);
+                if (result === 'win') {
+                    bestVec = { vx, vy, angle, speed };
+                    break;
+                }
+            }
+            return bestVec;
+        }
+
+        // ─── Trajectory Prediction ────────────────────────────────
+        function computeTrajectory(sx, sy, vx, vy, planets, W, H, steps = PREDICTION_STEPS) {
+            const pts = [];
+            let x = sx, y = sy, dvx = vx, dvy = vy;
+            const pad = 80;
+            for (let i = 0; i < steps; i++) {
+                let ax = 0, ay = 0;
+                for (const pl of planets) {
+                    const g = pl.getGravity(x, y);
+                    ax += g.fx; ay += g.fy;
+                }
+                dvx += ax * DT; dvy += ay * DT;
+                const spd = Math.hypot(dvx, dvy);
+                if (spd > MAX_VEL) { dvx = dvx / spd * MAX_VEL; dvy = dvy / spd * MAX_VEL; }
+                x += dvx * DT; y += dvy * DT;
+                if (x < -pad || x > W + pad || y < -pad || y > H + pad) break;
+                pts.push({ x, y });
+                // Stop early if approaching planet surface
+                let nearPlanet = false;
+                for (const pl of planets) if (dist({ x, y }, pl) < pl.radius + 4) { nearPlanet = true; break; }
+                if (nearPlanet) break;
+            }
+            return pts;
+        }
+
+        // ─── Main Game Object ─────────────────────────────────────
+        const game = {
+            level: 1,
+            attempts: 0,
+            highestLevel: 1,
+            state: 'title',  // title | loading | playing | win | lose
+            probe: null,
+            startPt: null,
+            goalObj: null,
+            planets: [],
+            hintVec: null,
+            showingHint: false,
+            hintLine: [],
+            dragging: false,
+            dragStart: null,
+            dragCurrent: null,
+            predictedPath: [],
+            time: 0,
+            stars: new StarField(220),
+            canvasShakeX: 0, canvasShakeY: 0,
+            warpOverlay: 0,
+            warpPhase: 0,
+            doingWarp: false,
+            glitchOverlay: 0,
+            difficultyLabel: 'NOVICE',
+            lastLevelData: null,
+            uiAnimating: false,
+            _nebulaPts: null,
+            _titlePlanets: null,
+
+            init() {
+                const saved = localStorage.getItem('neon_orbiter_best');
+                if (saved) {
+                    this.highestLevel = parseInt(saved) || 1;
+                    document.getElementById('title-record').textContent = `BEST LEVEL: ${this.highestLevel}`;
+                }
+                this.setupInput();
+                requestAnimationFrame(t => this.loop(t));
+            },
+
+            onResize() {
+                this._titlePlanets = null;  // reset title bg on resize
+                if (this.state === 'playing') this.generateAndLoad(this.level);
+            },
+
+            getDifficultyLabel(L) {
+                if (L <= 5) return 'NOVICE';
+                if (L <= 15) return 'ORBITAL';
+                if (L <= 29) return 'QUANTUM';
+                return 'EVENT HORIZON';
+            },
+
+            getDifficultyColor(L) {
+                if (L <= 5) return C.cyan;
+                if (L <= 15) return C.emerald;
+                if (L <= 29) return C.magenta;
+                return '#ff2244';
+            },
+
+            startGame() {
+                this.level = 1;
+                this.attempts = 0;
+                this.showScreen('none');
+                this.generateAndLoad(this.level);
+            },
+
+            nextLevel() {
+                this.level++;
+                this.attempts = 0;
+                this.showScreen('none');
+                this.generateAndLoad(this.level);
+            },
+
+            replayLevel() {
+                this.showScreen('none');
+                this.generateAndLoad(this.level);
+            },
+
+            backToTitle() {
+                this.showScreen('title');
+                const saved = localStorage.getItem('neon_orbiter_best');
+                document.getElementById('title-record').textContent = `BEST LEVEL: ${saved || 1}`;
+            },
+
+            generateAndLoad(L) {
+                this.showScreen('loading');
+                this.state = 'loading';
+                const bar = document.getElementById('loading-bar');
+                const txt = document.getElementById('loading-text');
+                bar.style.width = '0%';
+                txt.textContent = 'INITIALIZING SECTOR...';
+
+                let progress = 0;
+                const ATTEMPTS_MAX = 25;
+                let genAttempt = 0;
+                let found = false;
+
+                const W = canvas.width, H = canvas.height;
+
+                const tryGen = () => {
+                    if (found) return;
+                    genAttempt++;
+                    progress = Math.min(95, progress + 100 / ATTEMPTS_MAX);
+                    bar.style.width = progress + '%';
+                    txt.textContent = `SCANNING VECTORS... [${genAttempt}/${ATTEMPTS_MAX}]`;
+
+                    const levelData = generateLevel(L);
+                    // Snap planet positions for solver
+                    const snapPlanets = levelData.planets.map(p => ({ x: p.x, y: p.y, mass: p.mass, radius: p.radius, gravRange: p.gravRange }));
+                    const hintVec = solveLevel({ ...levelData, planets: snapPlanets }, W, H, 5000);
+
+                    if (hintVec) {
+                        found = true;
+                        bar.style.width = '100%';
+                        txt.textContent = 'TRAJECTORY LOCKED';
+                        this.hintVec = hintVec;
+                        this.loadLevel(levelData);
+                        setTimeout(() => {
+                            this.showScreen('none');
+                            this.showHud(true);
+                            this.state = 'playing';
+                            this.triggerGlitchIn();
+                        }, 350);
+                    } else if (genAttempt < ATTEMPTS_MAX) {
+                        setTimeout(tryGen, 10);
+                    } else {
+                        // Fallback: use last generated level with guaranteed straight path
+                        found = true;
+                        bar.style.width = '100%';
+                        txt.textContent = 'FALLBACK TRAJECTORY';
+                        const fallback = generateLevel(L);
+                        // Force a direct shot hint
+                        const dx = fallback.goalPt.x - fallback.startPt.x;
+                        const dy = fallback.goalPt.y - fallback.startPt.y;
+                        const d = Math.hypot(dx, dy);
+                        this.hintVec = { vx: dx / d * 250, vy: dy / d * 250, angle: Math.atan2(dy, dx), speed: 250 };
+                        this.loadLevel(fallback);
+                        setTimeout(() => {
+                            this.showScreen('none');
+                            this.showHud(true);
+                            this.state = 'playing';
+                            this.triggerGlitchIn();
+                        }, 350);
+                    }
+                };
+
+                setTimeout(tryGen, 80);
+            },
+
+            loadLevel(data) {
+                this.lastLevelData = data;
+                const W = canvas.width, H = canvas.height;
+                this.planets = data.planets;
+                this.startPt = new StartPoint(data.startPt.x, data.startPt.y);
+                this.goalObj = new Goal(data.goalPt.x, data.goalPt.y, data.goalPt.radius);
+                this.probe = new Probe(data.startPt.x, data.startPt.y);
+                this.dragging = false;
+                this.dragStart = null;
+                this.dragCurrent = null;
+                this.predictedPath = [];
+                this.showingHint = false;
+                this.hintLine = [];
+                this.warpOverlay = 0;
+                this.doingWarp = false;
+                this.warpPhase = 0;
+                this.glitchOverlay = 0;
+                this.canvasShakeX = 0; this.canvasShakeY = 0;
+                this._nebulaPts = null;  // refresh nebula per level
+                this.difficultyLabel = this.getDifficultyLabel(this.level);
+
+                // Update HUD
+                document.getElementById('hud-level').textContent = String(this.level).padStart(2, '0');
+                document.getElementById('hud-diff').textContent = this.difficultyLabel;
+                document.getElementById('hud-diff').style.color = this.getDifficultyColor(this.level);
+                document.getElementById('hud-diff').style.textShadow = `0 0 12px ${this.getDifficultyColor(this.level)}`;
+                document.getElementById('hud-attempts').textContent = this.attempts;
+                // Progress bar (capped at 30 levels for display)
+                const pct = Math.min(100, (this.level / 30) * 100);
+                document.getElementById('progress-bar').style.width = pct + '%';
+                // Sector label
+                const sectors = ['ALPHA', 'BETA', 'GAMMA', 'DELTA', 'EPSILON', 'ZETA', 'OMEGA'];
+                const sectorIdx = Math.floor((this.level - 1) / 5) % sectors.length;
+                document.getElementById('sector-label').textContent =
+                    `SECTOR ${sectors[sectorIdx]} · REGION ${String(this.level).padStart(2, '0')} · ${this.difficultyLabel}`;
+                this.updateHintBtn();
+            },
+
+            updateHintBtn() {
+                const btn = document.getElementById('hint-btn');
+                if (this.attempts >= 10 && this.hintVec) {
+                    btn.classList.add('visible');
+                } else {
+                    btn.classList.remove('visible');
+                }
+            },
+
+            showHint() {
+                if (!this.hintVec || this.state !== 'playing' || this.probe.launched) return;
+                this.showingHint = true;
+                // Compute hint trajectory
+                const snapPlanets = this.planets.map(p => ({ ...p, getGravity: Planet.prototype.getGravity.bind(p) }));
+                this.hintLine = computeTrajectory(
+                    this.startPt.x, this.startPt.y,
+                    this.hintVec.vx, this.hintVec.vy,
+                    this.planets, canvas.width, canvas.height, 500
+                );
+            },
+
+            setupInput() {
+                const getPos = (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    if (e.touches) {
+                        return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+                    }
+                    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                };
+
+                const onDown = (e) => {
+                    if (this.state !== 'playing' || this.probe.launched) return;
+                    const pos = getPos(e);
+                    const probePos = { x: this.startPt.x, y: this.startPt.y };
+                    if (dist(pos, probePos) < 40) {
+                        this.dragging = true;
+                        this.dragStart = { ...probePos };
+                        this.dragCurrent = pos;
+                        this.showingHint = false;
+                    }
+                };
+                const onMove = (e) => {
+                    if (!this.dragging) return;
+                    e.preventDefault();
+                    const pos = getPos(e);
+                    this.dragCurrent = pos;
+                    // Compute velocity
+                    const dx = this.dragStart.x - pos.x;
+                    const dy = this.dragStart.y - pos.y;
+                    const maxDrag = 180;
+                    const dragLen = Math.min(Math.hypot(dx, dy), maxDrag);
+                    const angle = Math.atan2(dy, dx);
+                    const speed = (dragLen / maxDrag) * MAX_VEL * 0.75;
+                    const vx = Math.cos(angle) * speed;
+                    const vy = Math.sin(angle) * speed;
+                    // Update prediction
+                    this.predictedPath = computeTrajectory(
+                        this.startPt.x, this.startPt.y, vx, vy, this.planets, canvas.width, canvas.height
+                    );
+                };
+                const onUp = (e) => {
+                    if (!this.dragging) return;
+                    this.dragging = false;
+                    if (!this.dragCurrent) return;
+                    const pos = this.dragCurrent;
+                    const dx = this.dragStart.x - pos.x;
+                    const dy = this.dragStart.y - pos.y;
+                    const maxDrag = 180;
+                    const dragLen = Math.min(Math.hypot(dx, dy), maxDrag);
+                    if (dragLen < 8) { this.dragCurrent = null; this.predictedPath = []; return; }
+                    const angle = Math.atan2(dy, dx);
+                    const speed = (dragLen / maxDrag) * MAX_VEL * 0.75;
+                    const vx = Math.cos(angle) * speed;
+                    const vy = Math.sin(angle) * speed;
+                    this.probe.launch(vx, vy);
+                    this.attempts++;
+                    document.getElementById('hud-attempts').textContent = this.attempts;
+                    this.predictedPath = [];
+                    this.dragCurrent = null;
+                    this.updateHintBtn();
+                };
+
+                canvas.addEventListener('mousedown', onDown);
+                canvas.addEventListener('mousemove', onMove);
+                canvas.addEventListener('mouseup', onUp);
+                canvas.addEventListener('touchstart', onDown, { passive: false });
+                canvas.addEventListener('touchmove', onMove, { passive: false });
+                canvas.addEventListener('touchend', onUp);
+            },
+
+            triggerWin() {
+                this.state = 'win';
+                if (this.level > this.highestLevel) {
+                    this.highestLevel = this.level;
+                    localStorage.setItem('neon_orbiter_best', this.highestLevel);
+                }
+                this.showComboFlash('WARP SUCCESS!', C.emerald);
+                // Warp drive canvas stretch animation
+                this.warpPhase = 0;
+                this.doingWarp = true;
+                const animWarp = () => {
+                    this.warpPhase += 0.04;
+                    if (this.warpPhase < 1) requestAnimationFrame(animWarp);
+                    else {
+                        this.doingWarp = false;
+                        this.warpOverlay = 0;
+                        document.getElementById('win-msg').textContent = `LEVEL ${this.level} COMPLETE · SECTOR CLEARED`;
+                        this.showScreen('win');
+                    }
+                };
+                requestAnimationFrame(animWarp);
+            },
+
+            triggerLoss(reason) {
+                this.state = 'lose';
+                this.probe.alive = false;
+                this.triggerShake();
+                const msgs = {
+                    planet: 'PROBE CONSUMED BY GRAVITATIONAL WELL',
+                    oob: 'PROBE LOST IN DEEP SPACE',
+                    blackhole: 'PROBE DEVOURED BY SINGULARITY'
+                };
+                this.showComboFlash('SIGNAL LOST', C.magenta);
+                setTimeout(() => {
+                    document.getElementById('lose-msg').textContent = msgs[reason] || 'GRAVITATIONAL COLLAPSE DETECTED';
+                    this.showScreen('lose');
+                }, 700);
+            },
+
+            triggerShake() {
+                let shakeT = 0;
+                const shaker = () => {
+                    shakeT += 0.05;
+                    const intensity = Math.max(0, 1 - shakeT * 2.5);
+                    this.canvasShakeX = (Math.random() - 0.5) * 14 * intensity;
+                    this.canvasShakeY = (Math.random() - 0.5) * 14 * intensity;
+                    if (intensity > 0.01) requestAnimationFrame(shaker);
+                    else { this.canvasShakeX = 0; this.canvasShakeY = 0; }
+                };
+                requestAnimationFrame(shaker);
+            },
+
+            triggerGlitchIn() {
+                // Flash canvas overlay
+                this.glitchOverlay = 1.0;
+            },
+
+            showComboFlash(text, color) {
+                const el = document.getElementById('combo-flash');
+                el.textContent = text;
+                el.style.color = color;
+                el.style.textShadow = `0 0 30px ${color}`;
+                el.style.opacity = '1';
+                el.style.transform = 'translate(-50%, -50%) scale(1.2)';
+                el.style.transition = 'none';
+                setTimeout(() => {
+                    el.style.transition = 'opacity 0.6s, transform 0.6s';
+                    el.style.opacity = '0';
+                    el.style.transform = 'translate(-50%, -50%) scale(0.8)';
+                }, 400);
+            },
+
+            showScreen(name) {
+                document.getElementById('title-screen').classList.add('hidden');
+                document.getElementById('loading-screen').classList.add('hidden');
+                document.getElementById('win-screen').classList.add('hidden');
+                document.getElementById('lose-screen').classList.add('hidden');
+                if (name !== 'none') {
+                    const el = document.getElementById(name + '-screen');
+                    if (el) { el.classList.remove('hidden'); }
+                }
+            },
+
+            showHud(show) {
+                document.getElementById('hud').classList.toggle('hidden', !show);
+            },
+
+            loop(timestamp) {
+                this.time = timestamp * 0.001;
+                const W = canvas.width, H = canvas.height;
+
+                ctx.save();
+                if (this.canvasShakeX || this.canvasShakeY) {
+                    ctx.translate(this.canvasShakeX, this.canvasShakeY);
+                }
+
+                // ── Background ──────────────────────────────────────
+                ctx.fillStyle = C.bg;
+                ctx.fillRect(0, 0, W, H);
+                // Grid lines
+                ctx.save();
+                ctx.strokeStyle = 'rgba(0,242,255,0.03)';
+                ctx.lineWidth = 1;
+                const gridSize = 60;
+                for (let gx = 0; gx < W; gx += gridSize) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+                for (let gy = 0; gy < H; gy += gridSize) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+                ctx.restore();
+                // Nebula clouds
+                this.drawNebula(W, H);
+                // Grain
+                const pat = ctx.createPattern(grainCanvas, 'repeat');
+                if (pat) { ctx.globalAlpha = 0.30; ctx.fillStyle = pat; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+                // Stars
+                this.stars.draw(W, H, this.time);
+                // Subtle vignette
+                const vig = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.85);
+                vig.addColorStop(0, 'rgba(0,0,0,0)');
+                vig.addColorStop(1, 'rgba(0,0,10,0.65)');
+                ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+
+                if (this.state === 'playing' || this.state === 'win' || this.state === 'lose') {
+                    this.updateAndDraw(W, H);
+                }
+                // Title / loading: draw animated background
+                if (this.state === 'title' || this.state === 'loading') {
+                    this.drawTitleBg(W, H);
+                }
+
+                // Warp drive animation
+                if (this.doingWarp && this.warpPhase !== undefined) {
+                    const wp = this.warpPhase;
+                    // Stretch effect using canvas transform
+                    const cx2 = W / 2, cy2 = H / 2;
+                    // Radial warp lines
+                    const numLines = 48;
+                    ctx.save();
+                    for (let i = 0; i < numLines; i++) {
+                        const angle = (i / numLines) * Math.PI * 2;
+                        const len = Math.max(W, H) * wp * 2.5;
+                        const startR = 20 * wp;
+                        ctx.beginPath();
+                        ctx.moveTo(cx2 + Math.cos(angle) * startR, cy2 + Math.sin(angle) * startR);
+                        ctx.lineTo(cx2 + Math.cos(angle) * len, cy2 + Math.sin(angle) * len);
+                        const alpha = Math.min(1, wp * 3) * (1 - wp * 0.5);
+                        ctx.strokeStyle = `rgba(0,255,136,${alpha * 0.6})`;
+                        ctx.lineWidth = 2 + wp * 4;
+                        ctx.shadowColor = C.emerald; ctx.shadowBlur = 20;
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                    // White flash at center
+                    const flashAlpha = Math.max(0, 1 - wp * 2);
+                    ctx.fillStyle = `rgba(255,255,255,${flashAlpha * 0.8})`;
+                    ctx.fillRect(0, 0, W, H);
+                    // Emerald overlay
+                    ctx.fillStyle = `rgba(0,255,136,${Math.max(0, 0.4 - wp * 0.4)})`;
+                    ctx.fillRect(0, 0, W, H);
+                }
+
+                // Glitch in overlay
+                if (this.glitchOverlay > 0) {
+                    this.glitchOverlay -= 0.08;
+                    if (Math.random() < 0.5) {
+                        const sliceY = rand(0, H);
+                        const sliceH = rand(2, 20);
+                        ctx.save();
+                        ctx.drawImage(canvas, 0, sliceY, W, sliceH, rand(-20, 20), sliceY, W, sliceH);
+                        ctx.restore();
+                    }
+                    ctx.fillStyle = `rgba(0,242,255,${this.glitchOverlay * 0.06})`;
+                    ctx.fillRect(0, 0, W, H);
+                }
+
+                ctx.restore();
+                requestAnimationFrame(t => this.loop(t));
+            },
+
+            updateAndDraw(W, H) {
+                const t = this.time;
+
+                // Update planets
+                for (const pl of this.planets) pl.update(t);
+                this.goalObj.update();
+                if (this.startPt) this.startPt.update();
+
+                // Update probe
+                if (this.probe && this.probe.launched && this.probe.alive && this.state === 'playing') {
+                    this.probe.update(this.planets);
+
+                    // Check win
+                    if (this.goalObj.contains(this.probe.x, this.probe.y)) {
+                        this.triggerWin();
+                        return;
+                    }
+
+                    // Check planet collision / black hole interaction
+                    for (const pl of this.planets) {
+                        const d2pl = dist(this.probe, pl);
+                        if (d2pl < pl.radius) {
+                            if (pl.isBlackhole) this.triggerLoss('blackhole');
+                            else this.triggerLoss('planet');
+                            return;
+                        }
+                        // Black hole slingshot boost (passes through BH_BOOST_RANGE but not surface)
+                        if (pl.isBlackhole && d2pl < pl.radius + BH_BOOST_RANGE && !pl._boosted) {
+                            pl._boosted = true;
+                            const factor = BH_BOOST_FACTOR;
+                            this.probe.vx *= factor;
+                            this.probe.vy *= factor;
+                            this.showComboFlash('SLINGSHOT!', '#aa00ff');
+                            // Flash
+                            this.glitchOverlay = 0.4;
+                            setTimeout(() => { pl._boosted = false; }, 2000);
+                        }
+                    }
+
+                    // Out of bounds
+                    if (this.probe.isOutOfBounds(W, H)) {
+                        this.triggerLoss('oob');
+                        return;
+                    }
+                }
+
+                // ── Draw orbit paths ──────────────────────────────
+                for (const pl of this.planets) pl.drawOrbitPath();
+
+                // ── Draw goal ─────────────────────────────────────
+                this.goalObj.draw();
+
+                // ── Draw planets ──────────────────────────────────
+                const showGrav = !this.probe.launched;
+                for (const pl of this.planets) pl.draw(t, showGrav);
+
+                // ── Drag UI ───────────────────────────────────────
+                if (this.dragging && this.dragStart && this.dragCurrent && !this.probe.launched) {
+                    const dx = this.dragStart.x - this.dragCurrent.x;
+                    const dy = this.dragStart.y - this.dragCurrent.y;
+                    const maxDrag = 180;
+                    const dragLen = Math.min(Math.hypot(dx, dy), maxDrag);
+                    const ratio = dragLen / maxDrag;
+
+                    // Elastic line
+                    ctx.save();
+                    ctx.setLineDash([5, 6]);
+                    ctx.strokeStyle = `rgba(0,242,255,0.5)`;
+                    ctx.lineWidth = 2;
+                    ctx.shadowColor = C.cyan; ctx.shadowBlur = 8;
+                    ctx.beginPath();
+                    ctx.moveTo(this.dragStart.x, this.dragStart.y);
+                    ctx.lineTo(this.dragCurrent.x, this.dragCurrent.y);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
+
+                    // Power indicator
+                    const pw = Math.round(ratio * 100);
+                    ctx.fillStyle = `rgba(0,242,255,0.7)`;
+                    ctx.font = '10px JetBrains Mono';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`PWR: ${pw}%`, this.dragCurrent.x, this.dragCurrent.y - 16);
+
+                    // Arrow head at drag current
+                    ctx.save();
+                    ctx.translate(this.dragCurrent.x, this.dragCurrent.y);
+                    ctx.rotate(Math.atan2(dy, dx));
+                    ctx.beginPath();
+                    ctx.moveTo(8, 0); ctx.lineTo(-8, 5); ctx.lineTo(-8, -5); ctx.closePath();
+                    ctx.fillStyle = `rgba(0,242,255,${0.6 * ratio})`;
+                    ctx.shadowColor = C.cyan; ctx.shadowBlur = 10;
+                    ctx.fill(); ctx.shadowBlur = 0;
+                    ctx.restore();
+                }
+
+                // ── Trajectory Prediction ─────────────────────────
+                if (this.predictedPath.length > 1 && !this.probe.launched) {
+                    ctx.save();
+                    for (let i = 0; i < this.predictedPath.length; i++) {
+                        const p = this.predictedPath[i];
+                        const ratio = i / this.predictedPath.length;
+                        if (i % 3 !== 0) continue;
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, 2.5 * (1 - ratio * 0.7), 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(0,242,255,${(1 - ratio) * 0.55})`;
+                        ctx.shadowColor = C.cyan; ctx.shadowBlur = 6;
+                        ctx.fill(); ctx.shadowBlur = 0;
+                    }
+                    ctx.restore();
+                }
+
+                // ── Hint Line ─────────────────────────────────────
+                if (this.showingHint && this.hintLine.length > 1) {
+                    ctx.save();
+                    ctx.setLineDash([8, 10]);
+                    ctx.strokeStyle = 'rgba(255,0,255,0.35)';
+                    ctx.lineWidth = 2;
+                    ctx.shadowColor = C.magenta; ctx.shadowBlur = 12;
+                    ctx.beginPath();
+                    ctx.moveTo(this.hintLine[0].x, this.hintLine[0].y);
+                    for (const p of this.hintLine) ctx.lineTo(p.x, p.y);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = 'rgba(255,0,255,0.7)';
+                    ctx.font = '9px JetBrains Mono';
+                    ctx.textAlign = 'left';
+                    ctx.fillText('GHOST VECTOR', this.hintLine[0].x + 14, this.hintLine[0].y - 10);
+                    ctx.restore();
+                }
+
+                // ── Start Point ───────────────────────────────────
+                if (this.startPt) this.startPt.draw(!this.probe.launched);
+
+                // ── Probe ─────────────────────────────────────────
+                if (this.probe) this.probe.draw();
+
+                // ── Crosshair at goal ─────────────────────────────
+                this.drawCrosshair(this.goalObj.x, this.goalObj.y);
+
+                // ── Level banner (first few frames) ──────────────
+                if (this.glitchOverlay > 0.2) {
+                    ctx.save();
+                    ctx.globalAlpha = this.glitchOverlay;
+                    ctx.fillStyle = C.cyan;
+                    ctx.font = `bold ${clamp(32, 32, 52)}px JetBrains Mono`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.shadowColor = C.cyan; ctx.shadowBlur = 30;
+                    ctx.fillText(`SECTOR ${String(this.level).padStart(2, '0')}`, W / 2, H / 2);
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
+                }
+            },
+
+            drawCrosshair(x, y) {
+                const s = 14 + 3 * Math.sin(this.time * 2);
+                ctx.save();
+                ctx.strokeStyle = 'rgba(0,255,136,0.25)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x - s, y); ctx.lineTo(x + s, y);
+                ctx.moveTo(x, y - s); ctx.lineTo(x, y + s);
+                ctx.stroke();
+                ctx.restore();
+            },
+
+            drawTitleBg(W, H) {
+                const t = this.time;
+                // Animated orbiting demo planets on title
+                if (!this._titlePlanets) {
+                    this._titlePlanets = [
+                        { cx: W * 0.5, cy: H * 0.5, r: Math.min(W, H) * 0.28, angle: 0, speed: 0.3, color: C.magenta, size: 14 },
+                        { cx: W * 0.5, cy: H * 0.5, r: Math.min(W, H) * 0.18, angle: 2.1, speed: -0.5, color: '#aa44ff', size: 9 },
+                        { cx: W * 0.5, cy: H * 0.5, r: Math.min(W, H) * 0.36, angle: 4.2, speed: 0.2, color: C.cyan, size: 7 },
+                    ];
+                }
+                for (const tp of this._titlePlanets) {
+                    tp.angle += tp.speed * DT;
+                    const px = tp.cx + Math.cos(tp.angle) * tp.r;
+                    const py = tp.cy + Math.sin(tp.angle) * tp.r;
+                    // Orbit ring
+                    ctx.beginPath();
+                    ctx.arc(tp.cx, tp.cy, tp.r, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(${hexToRgb(tp.color)},0.07)`;
+                    ctx.lineWidth = 1; ctx.stroke();
+                    // Planet
+                    ctx.beginPath();
+                    ctx.arc(px, py, tp.size, 0, Math.PI * 2);
+                    ctx.fillStyle = tp.color;
+                    ctx.shadowColor = tp.color; ctx.shadowBlur = 20;
+                    ctx.fill(); ctx.shadowBlur = 0;
+                }
+                // Central singularity
+                const cg = 0.7 + 0.3 * Math.sin(t * 1.5);
+                const cGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, 60);
+                cGrad.addColorStop(0, `rgba(0,255,136,${0.15 * cg})`);
+                cGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.beginPath(); ctx.arc(W / 2, H / 2, 60, 0, Math.PI * 2);
+                ctx.fillStyle = cGrad; ctx.fill();
+                ctx.beginPath(); ctx.arc(W / 2, H / 2, 8, 0, Math.PI * 2);
+                ctx.fillStyle = C.emerald; ctx.shadowColor = C.emerald; ctx.shadowBlur = 30;
+                ctx.fill(); ctx.shadowBlur = 0;
+            },
+
+            drawNebula(W, H) {
+                if (!this._nebulaPts) {
+                    this._nebulaPts = Array.from({ length: 5 }, () => ({
+                        x: rand(0.1, 0.9), y: rand(0.1, 0.9),
+                        rx: rand(0.12, 0.28), ry: rand(0.1, 0.22),
+                        color: [C.cyan, C.magenta, '#1a0040', '#002040', C.emerald][randInt(0, 4)],
+                        alpha: rand(0.012, 0.032)
+                    }));
+                }
+                for (const n of this._nebulaPts) {
+                    const g = ctx.createRadialGradient(n.x * W, n.y * H, 0, n.x * W, n.y * H, n.rx * W);
+                    g.addColorStop(0, `rgba(${hexToRgb(n.color)},${n.alpha})`);
+                    g.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.save();
+                    ctx.scale(1, n.ry / n.rx);
+                    ctx.fillStyle = g;
+                    ctx.beginPath();
+                    ctx.arc(n.x * W, n.y * H / (n.ry / n.rx), n.rx * W, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+        };
+
+        // ─── Boot ─────────────────────────────────────────────────
+        game.init();
+    </script>
+</body>
+
+</html>

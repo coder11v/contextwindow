@@ -1,0 +1,9 @@
+[
+  { "id": "gemini", "name": "gemini-3.1-pro-preview" },
+  { "id": "grok", "name": "grok-4.3" },
+  { "id": "gpt", "name": "gpt-5.3-codex" },
+  { "id": "qwen", "name": "qwen3.6-max-preview" },
+  { "id": "claude", "name": "claude-sonnet-4-6" },
+  { "id": "glm", "name": "glm-5.1" },
+  { "id": "deepseek", "name": "deepseek-v4-pro-thinking" }
+]

@@ -1,0 +1,81 @@
+Prompt: Develop "NEON-ORBITER: Event Horizon"
+
+Concept Summary
+Create a single-file HTML5/Canvas/JavaScript game titled Neon-Orbiter. The game is a physics-based orbital slingshot puzzle. Players launch a "Photon Probe" from a starting point to a "Singularity Gate" (Goal) using the gravitational pull of various stellar bodies.
+
+Aesthetic: "Neon-Minimalist Noir"
+Background: Deep midnight blue/black with a subtle, static-filled grain.
+
+Vector Style: Everything must be drawn with glowing "Neon" strokes (Bloom effect via shadowBlur).
+
+Color Palette: Cyan (#00f2ff) for the probe, Magenta (#ff00ff) for the planets, and Emerald (#00ff88) for the goal.
+
+UI: Use a mono-spaced, high-tech typeface (like 'JetBrains Mono' or 'Share Tech Mono'). Use "glitch" animations for level transitions.
+
+The "Single Solution" Mandate (Procedural Generation)
+To ensure every level is solvable, the generation logic must follow a Reverse-Validation Path:
+
+Placement: Randomly place the Start and Goal points at opposite ends of the screen.
+
+Obstacle Generation: Randomly place 3–8 planets.
+
+The Solver Simulation:
+
+Immediately after generation (and before the user sees it), run a background loop that simulates 5,000 random launch vectors.
+
+If a vector successfully reaches the goal, the level is "Verified" and presented to the user.
+
+If no vector reaches the goal, the level is instantly discarded and re-generated until a solution is found.
+
+Advanced: Store the successful "Ghost Vector" and offer it as a "Hint" if the user fails 10 times.
+
+Difficulty Scaling (The "Harder & Harder" Curve)
+Level difficulty must be a function of Level Number (L):
+
+L1–5: Static planets, high gravitational range, large Goal radius.
+
+L6–15: Add Orbital Velocity to planets. Planets now move in circular paths, requiring the player to time their launch.
+
+L16–30: Introduce Pulsing Mass. Planets' gravity wells expand and contract over time, shown by a breathing neon aura.
+
+L30+: "Black Hole" obstacles that consume the probe (loss condition) but provide immense speed boosts.
+
+Core Mechanics & Physics
+Gravitational Law: Implement 
+F
+=
+G
+×
+(
+m
+1
+×
+m
+2
+)
+/
+r
+2
+F=G×(m1×m2)/r 
+2
+ .
+
+Launch System: A "Pull-Back" mechanic (like Angry Birds) where the drag length determines velocity and the angle determines trajectory.
+
+Visual Feedback:
+
+Trajectory Prediction: Show the first 20% of the probe’s path as a faint neon dotted line before launch.
+
+Trail: The probe leaves a decaying neon tail that maps its previous path.
+
+Technical Requirements
+Single File: All HTML, CSS (Tailwind allowed via CDN), and JS must be in one .html file.
+
+Performance: Use requestAnimationFrame for a smooth 60FPS.
+
+State Management: Save the "Highest Level Reached" to localStorage.
+
+Win/Loss Conditions
+Win: Probe center enters the Goal radius. Trigger a "Warp Drive" animation where the screen stretches.
+
+Loss: Probe hits a planet surface or exits the screen boundaries. Trigger a screen-shake and a "Signal Lost" message.
